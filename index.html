@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name = viewport content = "width = device-width, initial-scale = 1">
+
+        <script src = http://skulpt.org/js/skulpt.min.js></script>
+        <script src = http://skulpt.org/js/skulpt-stdlib.js></script>
+        <script src = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/codemirror.min.js></script>
+        <script src = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/mode/python/python.min.js></script>
+
+        <link rel = stylesheet href = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/codemirror.min.css>
+        <link rel = stylesheet href = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/theme/material.min.css>
+        <link rel = stylesheet href = https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/fontawesome.min.css>
+        <link rel = stylesheet href = https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/solid.min.css>
+
+        <title>JoBase · Demo</title>
+
+        <style>
+            button:hover {background-color: #fff}
+            * {box-sizing: border-box}
+
+            body {
+                margin: 0;
+                padding: 1em;
+                background-color: #999;
+                display: flex;
+                gap: 1em
+            }
+
+            button {
+                border: none;
+                border-radius: 0.4em;
+                height: 100%;
+                font-size: 16px;
+                margin-right: 0.3em;
+                cursor: pointer;
+                padding-left: 0.5em;
+                padding-right: 0.5em;
+                transition-duration: 0.2s;
+                background-color: #ccc
+            }
+
+            .error {color: #f33}
+
+            .main {
+                width: 25%;
+                min-width: 15em
+            }
+        
+            .CodeMirror {
+                height: calc(100vh - 2em);
+                font-size: 16px;
+                border-radius: 0.4em;
+                flex-grow: 1
+            }
+
+            .main div {
+                height: 2.5em;
+                margin-bottom: 0.5em
+            }
+
+            .main pre {
+                background-color: #333;
+                font-size: 16px;
+                padding: 0.5em;
+                margin: 0;
+                color: #fff;
+                height: calc(100vh - 5em);
+                overflow-y: auto;
+                border-radius: 0.4em;
+                overflow-x: hidden;
+                white-space: pre-wrap;
+                word-break: break-all
+            }
+        </style>
+    </head>
+
+    <body>
+        <textarea id = code></textarea>
+
+        <div class = main>
+            <div>
+                <button onclick = run()><i class = "fa-solid fa-gear" id = spin></i> Run</button>
+                <button onclick = cancel()><i class = "fa-solid fa-stop"></i> Stop</button>
+            </div>
+            
+            <pre id = result></pre>
+        </div>
+
+        <script>
+            const program = {stop: false}
+            const mirror = CodeMirror.fromTextArea(code, {theme: "material", lineNumbers: true, indentUnit: 4})
+
+            mirror.setValue(localStorage.getItem("code") || "from JoBase import *")
+            mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))
+
+            Sk.configure({output, killableWhile: true, read})
+            Sk.timeoutMsg = () => "Aborted"
+
+            async function run() {
+                await cancel()
+
+                result.innerHTML = ""
+                spin.className = "fa-solid fa-arrows-rotate fa-spin"
+
+                try {
+                    await (program.promise = Sk.misceval.asyncToPromise(() =>
+                        Sk.importMainWithBody("<stdin>", false, mirror.getValue(), true)))
+                } catch (e) {output(e, true)}
+
+                spin.className = "fa-solid fa-gear"
+            }
+
+            async function cancel() {
+                try {
+                    Sk.execLimit = 0
+                    await program.promise
+                } catch {}
+
+                delete Sk.execLimit
+            }
+
+            function read(file) {
+                if (Sk.builtinFiles.files[file])
+                    return Sk.builtinFiles.files[file]
+
+                if (file.match(/\/JoBase\./))
+                    return Sk.misceval.promiseToSuspension(fetch("JoBase.js").then(r => r.text()))
+            }
+
+            function output(text, error) {
+                const span = document.createElement("span")
+
+                span.textContent = text
+                result.appendChild(span)
+
+                if (error) {
+                    span.className = "error"
+                    span.textContent += "\n"
+                }
+
+                if (result.children.length > 1000)
+                    result.replaceChildren()
+
+                result.scrollTop = result.scrollHeight
+            }
+        </script>
+    </body>
+</html>
