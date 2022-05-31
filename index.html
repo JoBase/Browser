@@ -3,8 +3,8 @@
     <head>
         <meta name = viewport content = "width = device-width, initial-scale = 1">
 
-        <script src = http://skulpt.org/js/skulpt.min.js></script>
-        <script src = http://skulpt.org/js/skulpt-stdlib.js></script>
+        <script src = https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js></script>
+        <script src = https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.min.js></script>
         <script src = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/codemirror.min.js></script>
         <script src = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/mode/python/python.min.js></script>
 
@@ -98,7 +98,7 @@
             mirror.setValue(localStorage.getItem("code") || content)
             mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))
 
-            Sk.configure({output, killableWhile: true, read})
+            Sk.configure({output, read, killableWhile: true})
             Sk.timeoutMsg = () => "Aborted"
 
             async function run() {
