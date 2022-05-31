@@ -1,2 +1,2 @@
-# JoBase Browser
-A JavaScript implementation of JoBase in the browser
+# Browser
+This is a JavaScript implementation of JoBase in the browser.
