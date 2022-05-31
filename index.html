@@ -91,7 +91,11 @@
             const program = {stop: false}
             const mirror = CodeMirror.fromTextArea(code, {theme: "material", lineNumbers: true, indentUnit: 4})
 
-            mirror.setValue(localStorage.getItem("code") || "from JoBase import *")
+            const content = 
+                "from JoBase import *\n\nrect = Rectangle(color = (0.2, 0.8, 0.3))" +
+                "\n\ndef loop():\n    rect.draw()\n    rect.angle += 1\n\nrun()"
+
+            mirror.setValue(localStorage.getItem("code") || content)
             mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))
 
             Sk.configure({output, killableWhile: true, read})
