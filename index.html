@@ -150,8 +150,20 @@
             })
 
             const content = 
-                "from JoBase import *\n\nimage = Image(MAN)" +
-                "\n\ndef loop():\n    image.draw()\n\nrun()"
+                "from JoBase import *\n\nman = Image(MAN)\ncoin = Image(COIN)\n" +
+                "enemy = Image(ENEMY)\n\nscore = 0\nwindow.caption = \"Coin Col" +
+                "lector\"\n\ndef loop():\n    global score\n\n    man.draw()\n " +
+                "   coin.draw()\n    enemy.draw()\n\n    if key.up: man.y += 3" +
+                "\n    elif key.down: man.y -= 3\n    elif key.left: man.x -= 3" +
+                "\n    elif key.right: man.x += 3\n\n    enemy.look_at(coin)\n " +
+                "   enemy.move_toward(coin, 1.5)\n\n    if man.collides_with(co" +
+                "in):\n        coin.x = random(window.left, window.right)\n    " +
+                "    coin.y = random(window.bottom, window.top)\n\n        scor" +
+                "e += 1\n        print(\"Score: \" + str(score))\n\n    if enem" +
+                "y.collides_with(coin):\n        coin.x = random(window.left, w" +
+                "indow.right)\n        coin.y = random(window.bottom, window.to" +
+                "p)\n\n        score -= 1\n        print(\"Score: \" + str(scor" +
+                "e))\n\nrun()"
 
             mirror.setValue(localStorage.getItem("code") || content)
             mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))

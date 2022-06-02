@@ -12,6 +12,7 @@ const $builtinmodule = () => {
     const build = (e, n, b) => Sk.misceval.buildClass(module, e, n, b)
     const call = (f, ...e) => Sk.misceval.callsim(f, ...e)
     const property = (g, s) => call(Sk.builtins.property, g, s)
+    const isShape = e => Sk.builtin.isinstance(e, shape).v
 
     const number = e => {
         if (e) {
@@ -334,8 +335,8 @@ const $builtinmodule = () => {
                 pos[1] - self.$pos[1], pos[0] - self.$pos[0]) * 180 / Math.PI
 
             if (other == module.cursor) set(getCursorPos())
-            else if (other.tp$base == shape) set(other.$pos)
-            else throw new Sk.builtin.TypeError("must be Shape or cursor, not " + other.tp$name)
+            else if (isShape(other)) set(other.$pos)
+            else throw new Sk.builtin.TypeError("must be Shape instance or cursor, not " + other.tp$name)
         })
 
         locals.move_toward = def((self, other, speed) => {
@@ -357,7 +358,7 @@ const $builtinmodule = () => {
             }
 
             if (other == module.cursor) set(getCursorPos())
-            else if (other.tp$base == shape) set(other.$pos)
+            else if (isShape(other)) set(other.$pos)
             else throw new Sk.builtin.TypeError("must be Shape or cursor, not " + other.tp$name)
         })
 
@@ -558,7 +559,7 @@ const $builtinmodule = () => {
             if (other == module.cursor)
                 return collidePolyPoint(getRectPoly(self), getCursorPos())
 
-            else if (other.tp$base == shape)
+            else if (isShape(other))
                 return collidePolyPoly(getRectPoly(self), getRectPoly(other))
 
             else throw new Sk.builtin.TypeError("must be Shape or cursor, not " + other.tp$name)
@@ -653,8 +654,9 @@ const $builtinmodule = () => {
     module.random = def((a, b) => {
         const x = number(a)
         const y = number(b)
+        const min = Math.min(x, y)
 
-        return Math.random() * (Math.max(x, y) - Math.min(x, y)) + Math.min(x, y)
+        return float(Math.random() * (Math.max(x, y) - min) + min)
     })
 
     module.run = def(() => Sk.misceval.promiseToSuspension(new Promise((resolve, reject) => {
