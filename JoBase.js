@@ -221,8 +221,8 @@ const $builtinmodule = () => {
     const mouseMove = event => {
         const rect = canvas.getBoundingClientRect()
 
-        module.cursor.$pos[0] = event.clientX - rect.left
-        module.cursor.$pos[1] = event.clientY - rect.top
+        module.cursor.$pos[0] = (event.clientX - rect.left) * devicePixelRatio
+        module.cursor.$pos[1] = (event.clientY - rect.top) * devicePixelRatio
         module.cursor.$move = true
     }
 
@@ -586,8 +586,8 @@ const $builtinmodule = () => {
 
     module.run = def(() => new Sk.misceval.promiseToSuspension(new Promise((resolve, reject) => {
         const observer = new ResizeObserver(entries => {
-            canvas.width = entries[0].contentRect.width
-            canvas.height = entries[0].contentRect.height
+            canvas.width = entries[0].contentRect.width * devicePixelRatio
+            canvas.height = entries[0].contentRect.height * devicePixelRatio
 
             module.window.$reisze = true
             gl.viewport(0, 0, canvas.width, canvas.height)
@@ -663,8 +663,11 @@ const $builtinmodule = () => {
     canvas.addEventListener("keydown", keyDown)
     canvas.addEventListener("keyup", keyUp)
 
-    display.replaceChildren(canvas)
     canvas.tabIndex = 0
+    canvas.style.width = "100%"
+    canvas.style.height = "100%"
+
+    display.replaceChildren(canvas)
     canvas.focus()
 
     const vertexShader = gl.createShader(gl.VERTEX_SHADER)
