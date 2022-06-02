@@ -150,8 +150,8 @@
             })
 
             const content = 
-                "from JoBase import *\n\nrect = Rectangle(color = (0.2, 0.8, 0.3))" +
-                "\n\ndef loop():\n    rect.draw()\n    rect.angle += 1\n\nrun()"
+                "from JoBase import *\n\nimage = Image(MAN)" +
+                "\n\ndef loop():\n    image.draw()\n\nrun()"
 
             mirror.setValue(localStorage.getItem("code") || content)
             mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))
