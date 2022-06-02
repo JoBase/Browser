@@ -213,6 +213,31 @@ const $builtinmodule = () => {
         return poly
     }
 
+    const drawRect = (rect, type) => {
+        const matrix = newMatrix()
+
+        gl.uniform1i(gl.getUniformLocation(program, "image"), type)
+        gl.bindBuffer(gl.ARRAY_BUFFER, mesh)
+
+        scaleMatrix(matrix, rect.$size.map((e, i) => e * rect.$scale[i]))
+        posMatrix(matrix, rect.$anchor)
+        rotMatrix(matrix, rect.$angle)
+        posMatrix(matrix, rect.$pos)
+        setUniform(matrix, rect.$color)
+
+        gl.vertexAttribPointer(
+            gl.getAttribLocation(program, "vertex"),
+            2, gl.FLOAT, false, 16, 0)
+
+        gl.vertexAttribPointer(
+            gl.getAttribLocation(program, "coordinate"),
+            2, gl.FLOAT, false, 16, 8)
+
+        gl.enableVertexAttribArray(0)
+        gl.enableVertexAttribArray(1)
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    }
+
     const mouseEnter = () => module.cursor.$enter = true
     const mouseLeave = () => module.cursor.$leave = true
     const mouseDown = () => module.cursor.$press = true
@@ -228,7 +253,6 @@ const $builtinmodule = () => {
 
     const keyDown = event => {
         const key = findKey(event)
-        console.log("hello")
 
         if (event.repeat) {
             module.key.$repeat = true
@@ -266,6 +290,7 @@ const $builtinmodule = () => {
     const program = gl.createProgram()
     const mesh = gl.createBuffer()
     const empty = def(() => {})
+    const textures = []
 
     const vector = build((globals, locals) => {
         const string = s => s.$data.map(v => v.get(s.$parent)).join(", ")
@@ -290,11 +315,19 @@ const $builtinmodule = () => {
     }, "Vector")
 
     const shape = build((globals, locals) => {
-        locals.__init__ = def(self => {
+        const init = (self, x, y, angle, color) => {
+            self.$color = [0, 0, 0, 1]
+            self.$pos = [number(x), number(y)]
+            self.$angle = number(angle)
             self.$anchor = [0, 0]
             self.$scale = [1, 1]
-            self.$color = [0, 0, 0, 1]
-        })
+
+            setVector(color, self.$color)
+        }
+
+        init.$defaults = [int(), int(), int(), tuple()]
+        init.co_varnames = ["self", "x", "y", "angle", "color"]
+        locals.__init__ = def(init)
 
         locals.look_at = def((self, other) => {
             const set = pos => self.$angle = Math.atan2(
@@ -382,6 +415,11 @@ const $builtinmodule = () => {
                 ["blue", getBlue, setBlue], ["alpha", getAlpha, setAlpha])),
             def((self, value) => setVector(value, self.$color)))
     }, "Shape")
+
+    module.__name__ = str("JoBase")
+    module.MAN = str("images/man.png")
+    module.COIN = str("images/coin.png")
+    module.ENEMY = str("images/enemy.png")
 
     module.window = call(build((globals, locals) => {
         const init = (self, caption, width, height, color) => {
@@ -506,42 +544,15 @@ const $builtinmodule = () => {
 
     module.Rectangle = build((globals, locals) => {
         const init = (self, x, y, width, height, angle, color) => {
-            call(shape.prototype.__init__, self)
-            setVector(color, self.$color)
-
-            self.$pos = [number(x), number(y)]
+            call(shape.prototype.__init__, self, x, y, angle, color)
             self.$size = [number(width), number(height)] 
-            self.$angle = number(angle)
         }
 
         init.$defaults = [int(), int(), int(50), int(50), int(), tuple()]
         init.co_varnames = ["self", "x", "y", "width", "height", "angle", "color"]
+
         locals.__init__ = def(init)
-
-        locals.draw = def(self => {
-            const matrix = newMatrix()
-
-            gl.uniform1i(gl.getUniformLocation(program, "image"), SHAPE)
-            gl.bindBuffer(gl.ARRAY_BUFFER, mesh)
-
-            scaleMatrix(matrix, self.$size.map((e, i) => e * self.$scale[i]))
-            posMatrix(matrix, self.$anchor)
-            rotMatrix(matrix, self.$angle)
-            posMatrix(matrix, self.$pos)
-            setUniform(matrix, self.$color)
-
-            gl.vertexAttribPointer(
-                gl.getAttribLocation(program, "vertex"),
-                2, gl.FLOAT, false, 16, 0)
-
-            gl.vertexAttribPointer(
-                gl.getAttribLocation(program, "coordinate"),
-                2, gl.FLOAT, false, 16, 8)
-
-            gl.enableVertexAttribArray(0)
-            gl.enableVertexAttribArray(1)
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
-        })
+        locals.draw = def(self => drawRect(self, shape))
 
         locals.collides_with = def((self, other) => {
             if (other == module.cursor)
@@ -584,7 +595,69 @@ const $builtinmodule = () => {
             def((self, value) => self.$pos[1] += number(value) - getPolyBottom(getRectPoly(self))))
     }, "Rectangle", [shape])
 
-    module.run = def(() => new Sk.misceval.promiseToSuspension(new Promise((resolve, reject) => {
+    module.Image = build((globals, locals) => {
+        const init = (self, name, x, y, angle, width, height, color) => Sk.misceval.promiseToSuspension(
+            new Promise(resolve => {
+                const texture = textures.find(e => e.name == string(name))
+                call(module.Rectangle.prototype.__init__, self, x, y, width, height, angle)
+
+                self.$color = [1, 1, 1, 1]
+                setVector(color, self.$color)
+
+                const setTexture = texture => {
+                    self.$texture = texture.source
+                    self.$size[0] ||= texture.width
+                    self.$size[1] ||= texture.height
+                }
+
+                if (texture) {
+                    setTexture(texture)
+                    return resolve()
+                }
+
+                const image = new Image()
+                image.src = string(name)
+
+                image.onload = () => {
+                    const texture = {
+                        name: string(name),
+                        width: image.width,
+                        height: image.height,
+                        source: gl.createTexture()
+                    }
+
+                    gl.bindTexture(gl.TEXTURE_2D, texture.source)
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+
+                    textures.push(texture)
+                    setTexture(texture)
+                    resolve()
+                }
+            }))
+
+        init.$defaults = [module.MAN, int(), int(), int(), int(), int(), tuple()]
+        init.co_varnames = ["self", "name", "x", "y", "angle", "width", "height", "color"]
+        locals.__init__ = def(init)
+
+        locals.draw = def(self => {
+            gl.activeTexture(gl.TEXTURE0)
+            gl.bindTexture(gl.TEXTURE_2D, self.$texture)
+            drawRect(self, IMAGE)
+        })
+    }, "Image", [module.Rectangle])
+
+    module.random = def((a, b) => {
+        const x = number(a)
+        const y = number(b)
+
+        return Math.random() * (Math.max(x, y) - Math.min(x, y)) + Math.min(x, y)
+    })
+
+    module.run = def(() => Sk.misceval.promiseToSuspension(new Promise((resolve, reject) => {
         const observer = new ResizeObserver(entries => {
             canvas.width = entries[0].contentRect.width * devicePixelRatio
             canvas.height = entries[0].contentRect.height * devicePixelRatio
@@ -652,9 +725,6 @@ const $builtinmodule = () => {
         loop()
     })))
 
-    module.__name__ = str("JoBase")
-    print("Welcome to JoBase")
-
     canvas.addEventListener("mouseenter", mouseEnter)
     canvas.addEventListener("mouseleave", mouseLeave)
     canvas.addEventListener("mousedown", mouseDown)
@@ -667,6 +737,7 @@ const $builtinmodule = () => {
     canvas.style.width = "100%"
     canvas.style.height = "100%"
 
+    print("Welcome to JoBase")
     display.replaceChildren(canvas)
     canvas.focus()
 
@@ -726,6 +797,8 @@ const $builtinmodule = () => {
         .5, -.5, 1, 1
     ]), gl.STATIC_DRAW)
 
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
 
     module.key.$data = {
