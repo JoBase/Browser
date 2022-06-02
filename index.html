@@ -24,6 +24,7 @@
                 padding: 1em;
                 background-color: #999;
                 display: flex;
+                overflow: hidden;
                 height: 100%
             }
 
@@ -37,6 +38,7 @@
                 padding-left: 0.5em;
                 padding-right: 0.5em;
                 transition-duration: 0.2s;
+                margin: 0
             }
 
             button:hover {
@@ -139,8 +141,13 @@
         </section>
 
         <script>
-            const mirror = CodeMirror.fromTextArea(code, {theme: "material", lineNumbers: true, indentUnit: 4})
             const program = {stop: false}
+
+            const mirror = CodeMirror.fromTextArea(code, {
+                theme: "material",
+                lineNumbers: true,
+                indentUnit: 4
+            })
 
             const content = 
                 "from JoBase import *\n\nrect = Rectangle(color = (0.2, 0.8, 0.3))" +
