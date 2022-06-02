@@ -16,7 +16,7 @@
         <title>JoBase · Demo</title>
 
         <style>
-            button:hover {background-color: #fff}
+            html {height: 100%}
             * {box-sizing: border-box}
 
             body {
@@ -24,72 +24,124 @@
                 padding: 1em;
                 background-color: #999;
                 display: flex;
-                gap: 1em
+                height: 100%
             }
 
             button {
                 border: none;
-                border-radius: 0.4em;
                 height: 100%;
                 font-size: 16px;
                 margin-right: 0.3em;
+                border-radius: 0.4em;
+                background-color: #ddd;
                 cursor: pointer;
                 padding-left: 0.5em;
                 padding-right: 0.5em;
                 transition-duration: 0.2s;
-                background-color: #ccc
+            }
+
+            button:hover {
+                background-color: #fff
+            }
+
+            section {
+                display: flex;
+                flex-direction: column
+            }
+
+            #horizontal, #vertical {
+                transition-duration: 0.2s;
+                border-radius: 0.4em
+            }
+
+            #horizontal:hover, #vertical:hover {
+                background-color: #777
+            }
+
+            #horizontal {
+                width: 1em;
+                cursor: col-resize
+            }
+
+            #vertical {
+                height: 1em;
+                cursor: row-resize
+            }
+
+            .display {
+                flex: 1 1 0;
+                min-width: 0
             }
 
             .error {color: #f33}
 
-            .main {
-                width: 25%;
-                min-width: 15em
-            }
-        
-            .CodeMirror {
-                height: calc(100vh - 2em);
-                font-size: 16px;
-                border-radius: 0.4em;
-                flex-grow: 1
-            }
-
-            .main div {
-                height: 2.5em;
-                margin-bottom: 0.5em
-            }
-
-            .main pre {
+            .display pre {
+                flex: 1 1 0;
                 background-color: #333;
                 font-size: 16px;
                 padding: 0.5em;
                 margin: 0;
+                height: 100%;
                 color: #fff;
-                height: calc(100vh - 5em);
                 overflow-y: auto;
                 border-radius: 0.4em;
                 overflow-x: hidden;
                 white-space: pre-wrap;
                 word-break: break-all
             }
+
+            #left > div:first-child {
+                border-radius: 0.4em;
+                background-color: #bbb;
+                height: 2em
+            }
+
+            #left {
+                flex: 0 0 auto;
+                resize: horizontal;
+                overflow: auto;
+                gap: 0.5em;
+                width: 50%
+            }
+
+            .display div:first-child {
+                border-radius: 0.4em;
+                background-color: #fff;
+                overflow: hidden;
+                height: 60%
+            }
+        
+            .CodeMirror {
+                height: 100%;
+                margin: 0;
+                font-size: 16px;
+                border-radius: 0.4em;
+                flex-grow: 1
+            }
         </style>
     </head>
 
     <body>
-        <textarea id = code></textarea>
-
-        <div class = main>
+        <section id = left>
             <div>
                 <button onclick = run()><i class = "fa-solid fa-gear" id = spin></i> Run</button>
                 <button onclick = cancel()><i class = "fa-solid fa-stop"></i> Stop</button>
             </div>
-            
+
+            <textarea id = code></textarea>
+        </section>
+
+        <div id = horizontal></div>
+
+        <section class = display>
+            <div id = canvas></div>
+            <div id = vertical></div>
             <pre id = result></pre>
-        </div>
+        </section>
 
         <script>
-            const program = {stop: false}
             const mirror = CodeMirror.fromTextArea(code, {theme: "material", lineNumbers: true, indentUnit: 4})
+            const program = {stop: false}
 
             const content = 
                 "from JoBase import *\n\nrect = Rectangle(color = (0.2, 0.8, 0.3))" +
@@ -97,9 +149,33 @@
 
             mirror.setValue(localStorage.getItem("code") || content)
             mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))
+            onmouseup = () => onpointermove = null
 
             Sk.configure({output, read, killableWhile: true})
             Sk.timeoutMsg = () => "Aborted"
+            Sk.JoBase = canvas
+
+            horizontal.onpointerdown = event => {
+                program.x = event.clientX
+
+                onpointermove = event => {
+                    const x = event.clientX - program.x
+
+                    left.style.width = left.offsetWidth + x + "px"
+                    program.x += x
+                }
+            }
+
+            vertical.onpointerdown = event => {
+                program.y = event.clientY
+                
+                onpointermove = event => {
+                    const y = event.clientY - program.y
+
+                    canvas.style.height = canvas.offsetHeight + y + "px"
+                    program.y += y
+                }
+            }
 
             async function run() {
                 await cancel()

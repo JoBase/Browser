@@ -1,4 +1,4 @@
-const $builtinmodule = () => new Sk.misceval.promiseToSuspension(new Promise(resolve => {
+const $builtinmodule = () => {
     const module = {}
 
     const print = e => Sk.misceval.print_(`${e}\n`)
@@ -213,197 +213,45 @@ const $builtinmodule = () => new Sk.misceval.promiseToSuspension(new Promise(res
         return poly
     }
 
-    const getDisplay = () => {
-        if (Sk.JoBase) {
-            const iframe = document.createElement("iframe")
+    const mouseEnter = () => module.cursor.$enter = true
+    const mouseLeave = () => module.cursor.$leave = true
+    const mouseDown = () => module.cursor.$press = true
+    const mouseUp = () => module.cursor.$release = true
 
-            Sk.JoBase.replaceChildren(iframe)
-            return iframe.contentWindow
-        }
+    const mouseMove = event => {
+        const rect = canvas.getBoundingClientRect()
 
-        return open("about:blank", "JoBase", "width=640,height=480")
+        module.cursor.$pos[0] = event.clientX - rect.left
+        module.cursor.$pos[1] = event.clientY - rect.top
+        module.cursor.$move = true
     }
 
-    const start = () => {
-        print("Welcome to JoBase")
+    const keyDown = event => {
+        const key = findKey(event)
+        console.log("hello")
 
-        const vertexShader = gl.createShader(gl.VERTEX_SHADER)
-        const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)
-
-        gl.shaderSource(vertexShader, `
-            attribute vec2 vertex;
-            attribute vec2 coordinate;
-            varying vec2 position;
-            
-            uniform mat4 camera;
-            uniform mat4 object;
-            
-            void main(void) {
-                gl_Position = camera * object * vec4(vertex, 0, 1);
-                position = coordinate;
-            }`)
-
-        gl.shaderSource(fragmentShader, `
-            precision mediump float;
-            varying vec2 position;
-
-            uniform vec4 color;
-            uniform sampler2D sampler;
-            uniform int image;
-    
-            void main(void) {
-                if (image == ${IMAGE}) gl_FragColor = texture2D(sampler, position) * color;
-                else if (image == ${TEXT}) gl_FragColor = color * vec4(1, 1, 1, texture2D(sampler, position).r);
-                else if (image == ${SHAPE}) gl_FragColor = color;
-            }`)
+        if (event.repeat) {
+            module.key.$repeat = true
+            if (key) key.repeat = true
+        }
         
-        gl.compileShader(vertexShader)
-        gl.compileShader(fragmentShader)
-        gl.attachShader(program, vertexShader)
-        gl.attachShader(program, fragmentShader)
+        else {
+            module.key.$press = true
 
-        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS))
-            alert("Vertex shader: " + gl.getShaderInfoLog(vertexShader))
+            if (key) {
+                key.hold = true
+                key.press = true
+            }
+        }
+    }
 
-        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS))
-            alert("Fragment shader: " + gl.getShaderInfoLog(fragmentShader))
-        
-        gl.linkProgram(program)
-        gl.useProgram(program)
-        gl.uniform1i(gl.getUniformLocation(program, "sampler"), 0)
+    const keyUp = event => {
+        const key = findKey(event)
+        module.key.$release = true
 
-        gl.deleteShader(vertexShader)
-        gl.deleteShader(fragmentShader)
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, mesh)
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            -.5, .5, 0, 0,
-            .5, .5, 1, 0,
-            -.5, -.5, 0, 1,
-            .5, -.5, 1, 1
-        ]), gl.STATIC_DRAW)
-
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
-
-        module.key.$data = {
-            space: {code: "Space"},
-            apostrophe: {code: "Quote"},
-            comma: {code: "Comma"},
-            minus: {code: "Minus"},
-            period: {code: "Period"},
-            slash: {code: "Slash"},
-            _0: {code: "Digit0"},
-            _1: {code: "Digit1"},
-            _2: {code: "Digit2"},
-            _3: {code: "Digit3"},
-            _4: {code: "Digit4"},
-            _5: {code: "Digit5"},
-            _6: {code: "Digit6"},
-            _7: {code: "Digit7"},
-            _8: {code: "Digit8"},
-            _9: {code: "Digit9"},
-            semicolon: {code: "Semicolon"},
-            equal: {code: "Equal"},
-            a: {code: "KeyA"},
-            b: {code: "KeyB"},
-            c: {code: "KeyC"},
-            d: {code: "KeyD"},
-            e: {code: "KeyE"},
-            f: {code: "KeyF"},
-            g: {code: "KeyG"},
-            h: {code: "KeyH"},
-            i: {code: "KeyI"},
-            j: {code: "KeyJ"},
-            k: {code: "KeyK"},
-            l: {code: "KeyL"},
-            m: {code: "KeyM"},
-            n: {code: "KeyN"},
-            o: {code: "KeyO"},
-            p: {code: "KeyP"},
-            q: {code: "KeyQ"},
-            r: {code: "KeyR"},
-            s: {code: "KeyS"},
-            t: {code: "KeyT"},
-            u: {code: "KeyU"},
-            v: {code: "KeyV"},
-            w: {code: "KeyW"},
-            x: {code: "KeyX"},
-            y: {code: "KeyY"},
-            z: {code: "KeyZ"},
-            left_bracket: {code: "BracketLeft"},
-            backslash: {code: "Backslash"},
-            right_bracket: {code: "BracketRight"},
-            backquote: {code: "Backquote"},
-            escape: {code: "Escape"},
-            enter: {code: "Enter"},
-            tab: {code: "Tab"},
-            backspace: {code: "Backspace"},
-            insert: {code: "Insert"},
-            delete: {code: "Delete"},
-            right: {code: "ArrowRight"},
-            left: {code: "ArrowLeft"},
-            down: {code: "ArrowDown"},
-            up: {code: "ArrowUp"},
-            page_up: {code: "PageUp"},
-            page_down: {code: "PageDown"},
-            home: {code: "Home"},
-            end: {code: "End"},
-            caps_lock: {code: "CapsLock"},
-            scroll_lock: {code: "ScrollLock"},
-            num_lock: {code: "NumLock"},
-            print_screen: {code: "PrintScreen"},
-            pause: {code: "Pause"},
-            f1: {code: "F1"},
-            f2: {code: "F2"},
-            f3: {code: "F3"},
-            f4: {code: "F4"},
-            f5: {code: "F5"},
-            f6: {code: "F6"},
-            f7: {code: "F7"},
-            f8: {code: "F8"},
-            f9: {code: "F9"},
-            f10: {code: "F10"},
-            f11: {code: "F11"},
-            f12: {code: "F12"},
-            f13: {code: "F13"},
-            f14: {code: "F14"},
-            f15: {code: "F15"},
-            f16: {code: "F16"},
-            f17: {code: "F17"},
-            f18: {code: "F18"},
-            f19: {code: "F19"},
-            f20: {code: "F20"},
-            f21: {code: "F21"},
-            f22: {code: "F22"},
-            f23: {code: "F23"},
-            f24: {code: "F24"},
-            f25: {code: "F25"},
-            pad_0: {code: "Numpad0"},
-            pad_1: {code: "Numpad1"},
-            pad_2: {code: "Numpad2"},
-            pad_3: {code: "Numpad3"},
-            pad_4: {code: "Numpad4"},
-            pad_5: {code: "Numpad5"},
-            pad_6: {code: "Numpad6"},
-            pad_7: {code: "Numpad7"},
-            pad_8: {code: "Numpad8"},
-            pad_9: {code: "Numpad9"},
-            decimal: {code: "NumpadDecimal"},
-            divide: {code: "NumpadDivide"},
-            multiply: {code: "NumpadMultiply"},
-            subtract: {code: "NumpadSubtract"},
-            add: {code: "NumpadAdd"},
-            enter: {code: "NumpadEnter"},
-            equal: {code: "NumpadEqual"},
-            left_shift: {code: "ShiftLeft"},
-            left_ctrl: {code: "ControlLeft"},
-            left_alt: {code: "AltLeft"},
-            left_super: {code: "SuperLeft"},
-            right_shift: {code: "ShiftRight"},
-            right_ctrl: {code: "ControlRight"},
-            right_alt: {code: "AltRight"},
-            right_super: {code: "SuperRight"},
-            menu: {code: "Menu"}
+        if (key) {
+            key.hold = false
+            key.release = true
         }
     }
 
@@ -411,9 +259,10 @@ const $builtinmodule = () => new Sk.misceval.promiseToSuspension(new Promise(res
     const IMAGE = 1
     const TEXT = 2
 
-    const display = getDisplay()
-    const canvas = display.document.createElement("canvas")
+    const display = Sk.JoBase
+    const canvas = document.createElement("canvas")
     const gl = canvas.getContext("webgl")
+    const main = Sk.importModule("__main__", false, true)
     const program = gl.createProgram()
     const mesh = gl.createBuffer()
     const empty = def(() => {})
@@ -439,70 +288,6 @@ const $builtinmodule = () => new Sk.misceval.promiseToSuspension(new Promise(res
         locals.__str__ = def(self => str(`(${string(self)})`))
         locals.__repr__ = def(self => str(`[${string(self)}]`))
     }, "Vector")
-
-    const window = build((globals, locals) => {
-        const init = (self, caption, width, height, color) => {
-            display.resizeTo(number(width), number(height))
-            display.document.title = string(caption)
-                          
-            self.$color = [1, 1, 1]
-            gl.clearColor(...setVector(color, self.$color), 1)
-        }
-
-        init.$defaults = [str("JoBase"), int(640), int(480), tuple()]
-        init.co_varnames = ["self", "caption", "width", "height", "color"]
-        locals.__init__ = def(init)
-
-        locals.close = def(display.close)
-        locals.maximize = empty
-        locals.minimize = empty
-        locals.focus = empty
-
-        locals.caption = property(
-            def(() => str(display.document.title)),
-            def((self, value) => display.document.title = string(value)))
-
-        const getRed = self => float(self.$color[0])
-        const setRed = (self, value) => {
-            self.$color[0] = number(value)
-            gl.clearColor(...self.$color, 1)
-        }
-
-        const getGreen = self => float(self.$color[1])
-        const setGreen = (self, value) => {
-            self.$color[1] = number(value)
-            gl.clearColor(...self.$color, 1)
-        }
-
-        const getBlue = self => float(self.$color[2])
-        const setBlue = (self, value) => {
-            self.$color[2] = number(value)
-            gl.clearColor(...self.$color, 1)
-        }
-
-        locals.red = property(def(getRed), def(setRed))
-        locals.green = property(def(getGreen), def(setGreen))
-        locals.blue = property(def(getBlue), def(setBlue))
-
-        locals.color = property(
-            def(self => call(
-                vector, self, ["red", getRed, setRed], ["green", getGreen, setGreen],
-                ["blue", getBlue, setBlue])),
-            def((self, value) => gl.clearColor(...setVector(value, self.$color), 1)))
-
-        const getWidth = () => int(canvas.width)
-        const getHeight = () => int(canvas.height)
-        
-        locals.width = property(def(getWidth))
-        locals.height = property(def(getHeight))
-
-        locals.size = property(def(self => call(vector, self, ["x", getWidth], ["y", getHeight])))
-        locals.top = property(def(() => float(canvas.height / 2)))
-        locals.bottom = property(def(() => float(canvas.height / -2)))
-        locals.left = property(def(() => float(canvas.width / -2)))
-        locals.right = property(def(() => float(canvas.width / 2)))
-        locals.resize = property(def(self => bool(self.$resize)))
-    }, "Window")
 
     const shape = build((globals, locals) => {
         locals.__init__ = def(self => {
@@ -598,13 +383,74 @@ const $builtinmodule = () => new Sk.misceval.promiseToSuspension(new Promise(res
             def((self, value) => setVector(value, self.$color)))
     }, "Shape")
 
-    module.__name__ = str("JoBase")
+    module.window = call(build((globals, locals) => {
+        const init = (self, caption, width, height, color) => {
+            self.$caption = string(caption)
+            self.$color = [1, 1, 1]
+
+            gl.clearColor(...setVector(color, self.$color), 1)
+        }
+
+        init.$defaults = [str("JoBase"), int(640), int(480), tuple()]
+        init.co_varnames = ["self", "caption", "width", "height", "color"]
+        locals.__init__ = def(init)
+
+        locals.close = def(self => self.$close = true)
+        locals.maximize = empty
+        locals.minimize = empty
+        locals.focus = empty
+
+        locals.caption = property(
+            def(self => str(self.$caption)),
+            def((self, value) => self.$caption = string(value)))
+
+        const getRed = self => float(self.$color[0])
+        const setRed = (self, value) => {
+            self.$color[0] = number(value)
+            gl.clearColor(...self.$color, 1)
+        }
+
+        const getGreen = self => float(self.$color[1])
+        const setGreen = (self, value) => {
+            self.$color[1] = number(value)
+            gl.clearColor(...self.$color, 1)
+        }
+
+        const getBlue = self => float(self.$color[2])
+        const setBlue = (self, value) => {
+            self.$color[2] = number(value)
+            gl.clearColor(...self.$color, 1)
+        }
+
+        locals.red = property(def(getRed), def(setRed))
+        locals.green = property(def(getGreen), def(setGreen))
+        locals.blue = property(def(getBlue), def(setBlue))
+
+        locals.color = property(
+            def(self => call(
+                vector, self, ["red", getRed, setRed], ["green", getGreen, setGreen],
+                ["blue", getBlue, setBlue])),
+            def((self, value) => gl.clearColor(...setVector(value, self.$color), 1)))
+
+        const getWidth = () => int(canvas.width)
+        const getHeight = () => int(canvas.height)
+        
+        locals.width = property(def(getWidth))
+        locals.height = property(def(getHeight))
+
+        locals.size = property(def(self => call(vector, self, ["x", getWidth], ["y", getHeight])))
+        locals.top = property(def(() => float(canvas.height / 2)))
+        locals.bottom = property(def(() => float(canvas.height / -2)))
+        locals.left = property(def(() => float(canvas.width / -2)))
+        locals.right = property(def(() => float(canvas.width / 2)))
+        locals.resize = property(def(self => bool(self.$resize)))
+    }, "Window"))
 
     module.cursor = call(build((globals, locals) => {
         locals.__init__ = def(self => {self.$pos = [0, 0]})
 
-        const getX = self => float(getCursorPos()[0])
-        const getY = self => float(getCursorPos()[1])
+        const getX = () => float(getCursorPos()[0])
+        const getY = () => float(getCursorPos()[1])
 
         locals.x = property(def(getX))
         locals.y = property(def(getY))
@@ -617,7 +463,7 @@ const $builtinmodule = () => new Sk.misceval.promiseToSuspension(new Promise(res
         locals.leave = property(def(self => bool(self.$leave)))
         locals.press = property(def(self => bool(self.$press)))
         locals.release = property(def(self => bool(self.$release)))
-    }))
+    }, "Cursor"))
 
     module.key = call(build((globals, locals) => {
         locals.__getattr__ = def((self, name) => {
@@ -633,7 +479,7 @@ const $builtinmodule = () => new Sk.misceval.promiseToSuspension(new Promise(res
         locals.press = property(def(self => bool(self.$press)))
         locals.release = property(def(self => bool(self.$release)))
         locals.repeat = property(def(self => bool(self.$repeat)))
-    }))
+    }, "Key"))
 
     module.camera = call(build((globals, locals) => {
         const init = (self, x, y) => {
@@ -656,55 +502,7 @@ const $builtinmodule = () => new Sk.misceval.promiseToSuspension(new Promise(res
         locals.pos = locals.position = property(
             def(self => call(vector, self, ["x", getX, setX], ["y", getY, setY])),
             def((self, value) => setVector(value, self.$pos)))
-    }))
-
-    module.run = def(() => new Sk.misceval.promiseToSuspension(new Promise((resolve, reject) => {
-        const main = Sk.importModule("__main__", false, true)
-
-        const loop = () => {
-            const matrix = newMatrix()
-            if (display.closed) return final()
-
-            posMatrix(matrix, module.camera.$pos)
-            invMatrix(matrix)
-            viewMatrix(matrix, module.camera.$view)
-
-            gl.clear(gl.COLOR_BUFFER_BIT)
-            gl.uniformMatrix4fv(gl.getUniformLocation(program, "camera"), false, matrix)
-
-            try {
-                main.$d.loop && call(main.$d.loop)
-                requestAnimationFrame(loop)
-            } catch (e) {final(e)}
-
-            module.window.$resize = false
-            module.cursor.$move = false
-            module.cursor.$enter = false
-            module.cursor.$leave = false
-            module.cursor.$press = false
-            module.cursor.$release = false
-            module.key.$press = false
-            module.key.$release = false
-            module.key.$repeat = false
-
-            for (const key in module.key.$data) {
-                module.key.$data[key].press = false
-                module.key.$data[key].release = false
-                module.key.$data[key].repeat = false
-            }
-        }
-
-        const final = e => {
-            display.close()
-
-            gl.deleteBuffer(mesh)
-            gl.deleteProgram(program)
-
-            e ? reject(e) : resolve()
-        }
-
-        loop()
-    })))
+    }, "Camera"))
 
     module.Rectangle = build((globals, locals) => {
         const init = (self, x, y, width, height, angle, color) => {
@@ -786,63 +584,267 @@ const $builtinmodule = () => new Sk.misceval.promiseToSuspension(new Promise(res
             def((self, value) => self.$pos[1] += number(value) - getPolyBottom(getRectPoly(self))))
     }, "Rectangle", [shape])
 
-    canvas.onmouseenter = () => module.cursor.$enter = true
-    canvas.onmouseleave = () => module.cursor.$leave = true
+    module.run = def(() => new Sk.misceval.promiseToSuspension(new Promise((resolve, reject) => {
+        const observer = new ResizeObserver(entries => {
+            canvas.width = entries[0].contentRect.width
+            canvas.height = entries[0].contentRect.height
 
-    display.onmousedown = () => module.cursor.$press = true
-    display.onmouseup = () => module.cursor.$release = true
-
-    display.onmousemove = event => {
-        module.cursor.$pos[0] = event.x
-        module.cursor.$pos[1] = event.y
-        module.cursor.$move = true
-    }
-
-    display.onload = () => {
-        module.window = call(window)
-
-        display.document.body.style.margin = 0
-        display.document.body.appendChild(canvas)
-
-        display.onresize = () => {
-            canvas.width = display.innerWidth
-            canvas.height = display.innerHeight
-    
-            module.window.$resize = true
+            module.window.$reisze = true
             gl.viewport(0, 0, canvas.width, canvas.height)
+            update()
+        })
+
+        const final = error => {
+            gl.deleteBuffer(mesh)
+            gl.deleteProgram(program)
+
+            canvas.removeEventListener("mouseenter", mouseEnter)
+            canvas.removeEventListener("mouseleave", mouseLeave)
+            canvas.removeEventListener("mousedown", mouseDown)
+            canvas.removeEventListener("mouseup", mouseUp)
+            canvas.removeEventListener("mousemove", mouseMove)
+            canvas.removeEventListener("keydown", keyDown)
+            canvas.removeEventListener("keyup", keyUp)
+
+            observer.disconnect()
+            error ? reject(error) : resolve()
         }
 
-        display.onresize()
-        resolve(module)
-    }
+        const update = () => {
+            const matrix = newMatrix()
 
-    display.onkeydown = event => {
-        const key = findKey(event)
+            posMatrix(matrix, module.camera.$pos)
+            invMatrix(matrix)
+            viewMatrix(matrix, module.camera.$view)
 
-        if (event.repeat) {
-            module.key.$repeat = true
-            if (key) key.repeat = true
-        }
-        
-        else {
-            module.key.$press = true
+            gl.clear(gl.COLOR_BUFFER_BIT)
+            gl.uniformMatrix4fv(gl.getUniformLocation(program, "camera"), false, matrix)
+            main.$d.loop && call(main.$d.loop)
 
-            if (key) {
-                key.hold = true
-                key.press = true
+            module.window.$resize = false
+            module.cursor.$move = false
+            module.cursor.$enter = false
+            module.cursor.$leave = false
+            module.cursor.$press = false
+            module.cursor.$release = false
+            module.key.$press = false
+            module.key.$release = false
+            module.key.$repeat = false
+
+            for (const key in module.key.$data) {
+                module.key.$data[key].press = false
+                module.key.$data[key].release = false
+                module.key.$data[key].repeat = false
             }
         }
-    }
 
-    display.onkeyup = event => {
-        const key = findKey(event)
-        module.key.$release = true
+        const loop = () => {
+            if (module.window.$close)
+                return final()
 
-        if (key) {
-            key.hold = false
-            key.release = true
+            try {
+                update()
+                requestAnimationFrame(loop)
+            } catch(e) {final(e)}
         }
+
+        observer.observe(display)
+        loop()
+    })))
+
+    module.__name__ = str("JoBase")
+    print("Welcome to JoBase")
+
+    canvas.addEventListener("mouseenter", mouseEnter)
+    canvas.addEventListener("mouseleave", mouseLeave)
+    canvas.addEventListener("mousedown", mouseDown)
+    canvas.addEventListener("mouseup", mouseUp)
+    canvas.addEventListener("mousemove", mouseMove)
+    canvas.addEventListener("keydown", keyDown)
+    canvas.addEventListener("keyup", keyUp)
+
+    display.replaceChildren(canvas)
+    canvas.tabIndex = 0
+    canvas.focus()
+
+    const vertexShader = gl.createShader(gl.VERTEX_SHADER)
+    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)
+
+    gl.shaderSource(vertexShader, `
+        attribute vec2 vertex;
+        attribute vec2 coordinate;
+        varying vec2 position;
+        
+        uniform mat4 camera;
+        uniform mat4 object;
+        
+        void main(void) {
+            gl_Position = camera * object * vec4(vertex, 0, 1);
+            position = coordinate;
+        }`)
+
+    gl.shaderSource(fragmentShader, `
+        precision mediump float;
+        varying vec2 position;
+
+        uniform vec4 color;
+        uniform sampler2D sampler;
+        uniform int image;
+
+        void main(void) {
+            if (image == ${IMAGE}) gl_FragColor = texture2D(sampler, position) * color;
+            else if (image == ${TEXT}) gl_FragColor = color * vec4(1, 1, 1, texture2D(sampler, position).r);
+            else if (image == ${SHAPE}) gl_FragColor = color;
+        }`)
+    
+    gl.compileShader(vertexShader)
+    gl.compileShader(fragmentShader)
+    gl.attachShader(program, vertexShader)
+    gl.attachShader(program, fragmentShader)
+
+    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS))
+        alert("Vertex shader: " + gl.getShaderInfoLog(vertexShader))
+
+    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS))
+        alert("Fragment shader: " + gl.getShaderInfoLog(fragmentShader))
+    
+    gl.linkProgram(program)
+    gl.useProgram(program)
+    gl.uniform1i(gl.getUniformLocation(program, "sampler"), 0)
+
+    gl.deleteShader(vertexShader)
+    gl.deleteShader(fragmentShader)
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -.5, .5, 0, 0,
+        .5, .5, 1, 0,
+        -.5, -.5, 0, 1,
+        .5, -.5, 1, 1
+    ]), gl.STATIC_DRAW)
+
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+
+    module.key.$data = {
+        space: {code: "Space"},
+        apostrophe: {code: "Quote"},
+        comma: {code: "Comma"},
+        minus: {code: "Minus"},
+        period: {code: "Period"},
+        slash: {code: "Slash"},
+        _0: {code: "Digit0"},
+        _1: {code: "Digit1"},
+        _2: {code: "Digit2"},
+        _3: {code: "Digit3"},
+        _4: {code: "Digit4"},
+        _5: {code: "Digit5"},
+        _6: {code: "Digit6"},
+        _7: {code: "Digit7"},
+        _8: {code: "Digit8"},
+        _9: {code: "Digit9"},
+        semicolon: {code: "Semicolon"},
+        equal: {code: "Equal"},
+        a: {code: "KeyA"},
+        b: {code: "KeyB"},
+        c: {code: "KeyC"},
+        d: {code: "KeyD"},
+        e: {code: "KeyE"},
+        f: {code: "KeyF"},
+        g: {code: "KeyG"},
+        h: {code: "KeyH"},
+        i: {code: "KeyI"},
+        j: {code: "KeyJ"},
+        k: {code: "KeyK"},
+        l: {code: "KeyL"},
+        m: {code: "KeyM"},
+        n: {code: "KeyN"},
+        o: {code: "KeyO"},
+        p: {code: "KeyP"},
+        q: {code: "KeyQ"},
+        r: {code: "KeyR"},
+        s: {code: "KeyS"},
+        t: {code: "KeyT"},
+        u: {code: "KeyU"},
+        v: {code: "KeyV"},
+        w: {code: "KeyW"},
+        x: {code: "KeyX"},
+        y: {code: "KeyY"},
+        z: {code: "KeyZ"},
+        left_bracket: {code: "BracketLeft"},
+        backslash: {code: "Backslash"},
+        right_bracket: {code: "BracketRight"},
+        backquote: {code: "Backquote"},
+        escape: {code: "Escape"},
+        enter: {code: "Enter"},
+        tab: {code: "Tab"},
+        backspace: {code: "Backspace"},
+        insert: {code: "Insert"},
+        delete: {code: "Delete"},
+        right: {code: "ArrowRight"},
+        left: {code: "ArrowLeft"},
+        down: {code: "ArrowDown"},
+        up: {code: "ArrowUp"},
+        page_up: {code: "PageUp"},
+        page_down: {code: "PageDown"},
+        home: {code: "Home"},
+        end: {code: "End"},
+        caps_lock: {code: "CapsLock"},
+        scroll_lock: {code: "ScrollLock"},
+        num_lock: {code: "NumLock"},
+        print_screen: {code: "PrintScreen"},
+        pause: {code: "Pause"},
+        f1: {code: "F1"},
+        f2: {code: "F2"},
+        f3: {code: "F3"},
+        f4: {code: "F4"},
+        f5: {code: "F5"},
+        f6: {code: "F6"},
+        f7: {code: "F7"},
+        f8: {code: "F8"},
+        f9: {code: "F9"},
+        f10: {code: "F10"},
+        f11: {code: "F11"},
+        f12: {code: "F12"},
+        f13: {code: "F13"},
+        f14: {code: "F14"},
+        f15: {code: "F15"},
+        f16: {code: "F16"},
+        f17: {code: "F17"},
+        f18: {code: "F18"},
+        f19: {code: "F19"},
+        f20: {code: "F20"},
+        f21: {code: "F21"},
+        f22: {code: "F22"},
+        f23: {code: "F23"},
+        f24: {code: "F24"},
+        f25: {code: "F25"},
+        pad_0: {code: "Numpad0"},
+        pad_1: {code: "Numpad1"},
+        pad_2: {code: "Numpad2"},
+        pad_3: {code: "Numpad3"},
+        pad_4: {code: "Numpad4"},
+        pad_5: {code: "Numpad5"},
+        pad_6: {code: "Numpad6"},
+        pad_7: {code: "Numpad7"},
+        pad_8: {code: "Numpad8"},
+        pad_9: {code: "Numpad9"},
+        decimal: {code: "NumpadDecimal"},
+        divide: {code: "NumpadDivide"},
+        multiply: {code: "NumpadMultiply"},
+        subtract: {code: "NumpadSubtract"},
+        add: {code: "NumpadAdd"},
+        enter: {code: "NumpadEnter"},
+        equal: {code: "NumpadEqual"},
+        left_shift: {code: "ShiftLeft"},
+        left_ctrl: {code: "ControlLeft"},
+        left_alt: {code: "AltLeft"},
+        left_super: {code: "SuperLeft"},
+        right_shift: {code: "ShiftRight"},
+        right_ctrl: {code: "ControlRight"},
+        right_alt: {code: "AltRight"},
+        right_super: {code: "SuperRight"},
+        menu: {code: "Menu"}
     }
 
-    start()
-}))
+    return module
+}
