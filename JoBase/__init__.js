@@ -57,14 +57,14 @@ const $builtinmodule = () => {
         return source
     }
 
-    const getCursorPos = () => [
-        module.cursor.$pos[0] - canvas.width / 2,
-        canvas.height / 2 - module.cursor.$pos[1]
-    ]
-
     const getWindowSize = () => [
         canvas.width / devicePixelRatio,
         canvas.height / devicePixelRatio
+    ]
+
+    const getCursorPos = () => [
+        module.cursor.$pos[0] - getWindowSize()[0] / 2,
+        getWindowSize()[1] / 2 - module.cursor.$pos[1]
     ]
 
     const newMatrix = () => new Float32Array([
