@@ -10,9 +10,15 @@ const $builtinmodule = () => {
     const tuple = e => new Sk.builtin.tuple(e)
     const dict = e => new Sk.builtin.dict(e)
     const build = (e, n, b) => Sk.misceval.buildClass(module, e, n, b)
-    const call = (f, ...e) => Sk.misceval.callsim(f, ...e)
+    const call = (f, ...e) => Sk.misceval.callsimOrSuspend(f, ...e)
     const property = (g, s) => call(Sk.builtins.property, g, s)
     const isShape = e => Sk.builtin.isinstance(e, shape).v
+    const image = e => str(`https://jobase.org/Browser/images/${e}.png`)
+    const font = e => str(`https://jobase.org/Browser/fonts/${e}.ttf`)
+    const wait = e => Sk.misceval.promiseToSuspension(new Promise(e))
+
+    const shapeError = e => new Sk.builtin.TypeError(
+        "must be Shape instance or cursor, not " + e.tp$name)
 
     const number = e => {
         if (e) {
@@ -54,6 +60,11 @@ const $builtinmodule = () => {
     const getCursorPos = () => [
         module.cursor.$pos[0] - canvas.width / 2,
         canvas.height / 2 - module.cursor.$pos[1]
+    ]
+
+    const getWindowSize = () => [
+        canvas.width / devicePixelRatio,
+        canvas.height / devicePixelRatio
     ]
 
     const newMatrix = () => new Float32Array([
@@ -141,8 +152,8 @@ const $builtinmodule = () => {
     const viewMatrix = (matrix, view) => {
         const base = newMatrix()
 
-        base[0] = 2 / canvas.width
-        base[5] = 2 / canvas.height
+        base[0] = 2 / getWindowSize()[0]
+        base[5] = 2 / getWindowSize()[1]
         base[10] = -2 / (view[1] - view[0])
         base[14] = (-view[1] + view[0]) / (view[1] - view[0])
         mulMatrix(matrix, base)
@@ -239,6 +250,51 @@ const $builtinmodule = () => {
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
     }
 
+    const createImage = image => {
+        const texture = gl.createTexture()
+        gl.bindTexture(gl.TEXTURE_2D, texture)
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+        return texture
+    }
+
+    const renderText = text => {
+        const canvas = document.createElement("canvas")
+        const context = canvas.getContext("2d")
+        const name = text.$font_size + "px _" + fonts.indexOf(text.$font)
+        context.font = name
+
+        const size = context.measureText(text.$content)
+        const width = size.actualBoundingBoxRight - size.actualBoundingBoxLeft
+
+        const metrics = context.measureText("Hy")
+        const height = metrics.actualBoundingBoxDescent + metrics.actualBoundingBoxAscent
+
+        text.$size[0] = canvas.width = width
+        text.$size[1] = canvas.height = height
+
+        context.font = name
+        context.fillStyle = "#fff"
+        context.fillText(text.$content, 0, metrics.actualBoundingBoxAscent)
+
+        gl.deleteTexture(text.$texture)
+        text.$texture = createImage(canvas)
+    }
+
+    const loadFont = font => new Promise(
+        (resolve, reject) => fonts.includes(font) ? resolve() : new FontFace(
+            "_" + fonts.length, `url(${font})`).load().then(face => {
+                document.fonts.add(face)
+
+                fonts.push(font)
+                resolve()
+            }).catch(() => reject(new Sk.builtin.FileNotFoundError(
+                `failed to load font: "${font}"`))))
+
     const mouseEnter = () => module.cursor.$enter = true
     const mouseLeave = () => module.cursor.$leave = true
     const mouseDown = () => module.cursor.$press = true
@@ -247,8 +303,8 @@ const $builtinmodule = () => {
     const mouseMove = event => {
         const rect = canvas.getBoundingClientRect()
 
-        module.cursor.$pos[0] = (event.clientX - rect.left) * devicePixelRatio
-        module.cursor.$pos[1] = (event.clientY - rect.top) * devicePixelRatio
+        module.cursor.$pos[0] = event.clientX - rect.left
+        module.cursor.$pos[1] = event.clientY - rect.top
         module.cursor.$move = true
     }
 
@@ -280,18 +336,15 @@ const $builtinmodule = () => {
         }
     }
 
-    const SHAPE = 0
-    const IMAGE = 1
-    const TEXT = 2
-
     const display = Sk.JoBase
     const canvas = document.createElement("canvas")
     const gl = canvas.getContext("webgl")
-    const main = Sk.importModule("__main__", false, true)
     const program = gl.createProgram()
     const mesh = gl.createBuffer()
     const empty = def(() => {})
+
     const textures = []
+    const fonts = []
 
     const vector = build((globals, locals) => {
         const string = s => s.$data.map(v => v.get(s.$parent)).join(", ")
@@ -336,7 +389,7 @@ const $builtinmodule = () => {
 
             if (other == module.cursor) set(getCursorPos())
             else if (isShape(other)) set(other.$pos)
-            else throw new Sk.builtin.TypeError("must be Shape instance or cursor, not " + other.tp$name)
+            else throw shapeError(other)
         })
 
         locals.move_toward = def((self, other, speed) => {
@@ -359,7 +412,7 @@ const $builtinmodule = () => {
 
             if (other == module.cursor) set(getCursorPos())
             else if (isShape(other)) set(other.$pos)
-            else throw new Sk.builtin.TypeError("must be Shape or cursor, not " + other.tp$name)
+            else throw shapeError(other)
         })
 
         const getX = self => float(self.$pos[0])
@@ -418,9 +471,18 @@ const $builtinmodule = () => {
     }, "Shape")
 
     module.__name__ = str("JoBase")
-    module.MAN = str("images/man.png")
-    module.COIN = str("images/coin.png")
-    module.ENEMY = str("images/enemy.png")
+
+    module.MAN = image("man")
+    module.COIN = image("coin")
+    module.ENEMY = image("enemy")
+
+    module.DEFAULT = font("default")
+    module.CODE = font("code")
+    module.PENCIL = font("pencil")
+    module.SERIF = font("serif")
+    module.HANDWRITING = font("handwriting")
+    module.TYPEWRITER = font("typewriter")
+    module.JOINED = font("joined")
 
     module.window = call(build((globals, locals) => {
         const init = (self, caption, width, height, color) => {
@@ -471,17 +533,17 @@ const $builtinmodule = () => {
                 ["blue", getBlue, setBlue])),
             def((self, value) => gl.clearColor(...setVector(value, self.$color), 1)))
 
-        const getWidth = () => int(canvas.width)
-        const getHeight = () => int(canvas.height)
+        const getWidth = () => int(getWindowSize()[0])
+        const getHeight = () => int(getWindowSize()[1])
         
         locals.width = property(def(getWidth))
         locals.height = property(def(getHeight))
 
         locals.size = property(def(self => call(vector, self, ["x", getWidth], ["y", getHeight])))
-        locals.top = property(def(() => float(canvas.height / 2)))
-        locals.bottom = property(def(() => float(canvas.height / -2)))
-        locals.left = property(def(() => float(canvas.width / -2)))
-        locals.right = property(def(() => float(canvas.width / 2)))
+        locals.top = property(def(() => float(getWindowSize()[1] / 2)))
+        locals.bottom = property(def(() => float(getWindowSize()[1] / -2)))
+        locals.left = property(def(() => float(getWindowSize()[0] / -2)))
+        locals.right = property(def(() => float(getWindowSize()[0] / 2)))
         locals.resize = property(def(self => bool(self.$resize)))
     }, "Window"))
 
@@ -553,7 +615,7 @@ const $builtinmodule = () => {
         init.co_varnames = ["self", "x", "y", "width", "height", "angle", "color"]
 
         locals.__init__ = def(init)
-        locals.draw = def(self => drawRect(self, shape))
+        locals.draw = def(self => drawRect(self, false))
 
         locals.collides_with = def((self, other) => {
             if (other == module.cursor)
@@ -562,7 +624,7 @@ const $builtinmodule = () => {
             else if (isShape(other))
                 return collidePolyPoly(getRectPoly(self), getRectPoly(other))
 
-            else throw new Sk.builtin.TypeError("must be Shape or cursor, not " + other.tp$name)
+            else throw shapeError(other)
         })
 
         const getWidth = self => float(self.$size[0])
@@ -597,48 +659,44 @@ const $builtinmodule = () => {
     }, "Rectangle", [shape])
 
     module.Image = build((globals, locals) => {
-        const init = (self, name, x, y, angle, width, height, color) => Sk.misceval.promiseToSuspension(
-            new Promise(resolve => {
-                const texture = textures.find(e => e.name == string(name))
-                call(module.Rectangle.prototype.__init__, self, x, y, width, height, angle)
+        const init = (self, name, x, y, angle, width, height, color) => wait((resolve, reject) => {
+            const texture = textures.find(e => e.name == string(name))
+            call(module.Rectangle.prototype.__init__, self, x, y, width, height, angle)
 
-                self.$color = [1, 1, 1, 1]
-                setVector(color, self.$color)
+            self.$color = [1, 1, 1, 1]
+            setVector(color, self.$color)
 
-                const setTexture = texture => {
-                    self.$texture = texture.source
-                    self.$size[0] ||= texture.width
-                    self.$size[1] ||= texture.height
+            const setTexture = texture => {
+                self.$texture = texture.source
+                self.$size[0] ||= texture.width
+                self.$size[1] ||= texture.height
+            }
+
+            if (texture) {
+                setTexture(texture)
+                return resolve()
+            }
+
+            const image = new Image()
+            image.crossOrigin = "anonymous"
+            image.src = string(name)
+
+            image.onerror = () => reject(new Sk.builtin.FileNotFoundError(
+                `failed to load image: "${string(name)}"`))
+
+            image.onload = () => {
+                const texture = {
+                    name: string(name),
+                    width: image.width,
+                    height: image.height,
+                    source: createImage(image)
                 }
 
-                if (texture) {
-                    setTexture(texture)
-                    return resolve()
-                }
-
-                const image = new Image()
-                image.src = string(name)
-
-                image.onload = () => {
-                    const texture = {
-                        name: string(name),
-                        width: image.width,
-                        height: image.height,
-                        source: gl.createTexture()
-                    }
-
-                    gl.bindTexture(gl.TEXTURE_2D, texture.source)
-                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-
-                    textures.push(texture)
-                    setTexture(texture)
-                    resolve()
-                }
-            }))
+                textures.push(texture)
+                setTexture(texture)
+                resolve()
+            }
+        })
 
         init.$defaults = [module.MAN, int(), int(), int(), int(), int(), tuple()]
         init.co_varnames = ["self", "name", "x", "y", "angle", "width", "height", "color"]
@@ -647,9 +705,57 @@ const $builtinmodule = () => {
         locals.draw = def(self => {
             gl.activeTexture(gl.TEXTURE0)
             gl.bindTexture(gl.TEXTURE_2D, self.$texture)
-            drawRect(self, IMAGE)
+            drawRect(self, true)
         })
     }, "Image", [module.Rectangle])
+
+    module.Text = build((globals, locals) => {
+        const init = (self, content, x, y, font_size, angle, color, font) => wait((resolve, reject) => {
+            call(module.Rectangle.prototype.__init__, self, x, y, int(), int(), angle, color)
+
+            self.$font = string(font)
+            self.$font_size = number(font_size)
+            self.$content = string(content)
+
+            loadFont(self.$font).then(() => {
+                renderText(self)
+                resolve()
+            }).catch(reject)
+        })
+
+        init.$defaults = [str("Text"), int(), int(), int(50), int(), tuple(), module.DEFAULT]
+        init.co_varnames = ["self", "content", "x", "y", "font_size", "angle", "color", "font"]
+        locals.__init__ = def(init)
+
+        locals.draw = def(self => {
+            gl.activeTexture(gl.TEXTURE0)
+            gl.bindTexture(gl.TEXTURE_2D, self.$texture)
+            drawRect(self, true)
+        })
+
+        locals.content = property(
+            def(self => str(self.$content)),
+            def((self, value) => {
+                self.$content = string(value)
+                renderText(self)
+            }))
+
+        locals.font = property(
+            def(self => str(self.$font)),
+            def((self, value) => wait((resolve, reject) => {
+                loadFont(self.$font = string(value)).then(() => {
+                    renderText(self)
+                    resolve()
+                }).catch(reject)
+            })))
+
+        locals.font_size = property(
+            def(self => float(self.$font_size)),
+            def((self, value) => {
+                self.$font_size = number(value)
+                renderText(self)
+            }))
+    }, "Text", [module.Rectangle])
 
     module.random = def((a, b) => {
         const x = number(a)
@@ -659,7 +765,9 @@ const $builtinmodule = () => {
         return float(Math.random() * (Math.max(x, y) - min) + min)
     })
 
-    module.run = def(() => Sk.misceval.promiseToSuspension(new Promise((resolve, reject) => {
+    module.run = def(() => wait((resolve, reject) => {
+        const main = Sk.importModule("__main__", false, true)
+
         const observer = new ResizeObserver(entries => {
             canvas.width = entries[0].contentRect.width * devicePixelRatio
             canvas.height = entries[0].contentRect.height * devicePixelRatio
@@ -670,6 +778,8 @@ const $builtinmodule = () => {
         })
 
         const final = error => {
+            textures.forEach(e => gl.deleteTexture(e.source))
+
             gl.deleteBuffer(mesh)
             gl.deleteProgram(program)
 
@@ -725,7 +835,7 @@ const $builtinmodule = () => {
 
         observer.observe(display)
         loop()
-    })))
+    }))
 
     canvas.addEventListener("mouseenter", mouseEnter)
     canvas.addEventListener("mouseleave", mouseLeave)
@@ -768,21 +878,14 @@ const $builtinmodule = () => {
         uniform int image;
 
         void main(void) {
-            if (image == ${IMAGE}) gl_FragColor = texture2D(sampler, position) * color;
-            else if (image == ${TEXT}) gl_FragColor = color * vec4(1, 1, 1, texture2D(sampler, position).r);
-            else if (image == ${SHAPE}) gl_FragColor = color;
+            if (image == 1) gl_FragColor = texture2D(sampler, position) * color;
+            else gl_FragColor = color;
         }`)
     
     gl.compileShader(vertexShader)
     gl.compileShader(fragmentShader)
     gl.attachShader(program, vertexShader)
     gl.attachShader(program, fragmentShader)
-
-    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS))
-        alert("Vertex shader: " + gl.getShaderInfoLog(vertexShader))
-
-    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS))
-        alert("Fragment shader: " + gl.getShaderInfoLog(fragmentShader))
     
     gl.linkProgram(program)
     gl.useProgram(program)

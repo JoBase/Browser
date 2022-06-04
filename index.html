@@ -3,17 +3,18 @@
     <head>
         <meta name = viewport content = "width = device-width, initial-scale = 1">
 
-        <script src = https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js></script>
-        <script src = https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.min.js></script>
+        <script src = skulpt/skulpt.min.js></script>
+        <script src = skulpt/skulpt-stdlib.js></script>
+
         <script src = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/codemirror.min.js></script>
         <script src = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/mode/python/python.min.js></script>
 
         <link rel = stylesheet href = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/codemirror.min.css>
         <link rel = stylesheet href = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/theme/material.min.css>
-        <link rel = stylesheet href = https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/fontawesome.min.css>
-        <link rel = stylesheet href = https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/solid.min.css>
+        <link rel = stylesheet href = /assets/fontawesome/css/fontawesome.min.css>
+        <link rel = stylesheet href = /assets/fontawesome/css/solid.min.css>
 
-        <title>JoBase · Demo</title>
+        <title>JoBase · Browser</title>
 
         <style>
             html {height: 100%}
@@ -142,7 +143,7 @@
         </section>
 
         <script>
-            const program = {stop: false}
+            const program = {}
 
             const mirror = CodeMirror.fromTextArea(code, {
                 theme: "material",
@@ -150,50 +151,21 @@
                 indentUnit: 4
             })
 
-            const content = 
-                "from JoBase import *\n\nman = Image(MAN)\ncoin = Image(COIN)\n" +
-                "enemy = Image(ENEMY)\n\nscore = 0\nwindow.caption = \"Coin Col" +
-                "lector\"\n\ndef loop():\n    global score\n\n    man.draw()\n " +
-                "   coin.draw()\n    enemy.draw()\n\n    if key.up: man.y += 3" +
-                "\n    elif key.down: man.y -= 3\n    elif key.left: man.x -= 3" +
-                "\n    elif key.right: man.x += 3\n\n    enemy.look_at(coin)\n " +
-                "   enemy.move_toward(coin, 1.5)\n\n    if man.collides_with(co" +
-                "in):\n        coin.x = random(window.left, window.right)\n    " +
-                "    coin.y = random(window.bottom, window.top)\n\n        scor" +
-                "e += 1\n        print(\"Score: \" + str(score))\n\n    if enem" +
-                "y.collides_with(coin):\n        coin.x = random(window.left, w" +
-                "indow.right)\n        coin.y = random(window.bottom, window.to" +
-                "p)\n\n        score -= 1\n        print(\"Score: \" + str(scor" +
-                "e))\n\nrun()"
+            function output(text, error) {
+                const span = document.createElement("span")
 
-            mirror.setValue(localStorage.getItem("code") || content)
-            mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))
-            onmouseup = () => onpointermove = null
+                span.textContent = text
+                result.appendChild(span)
 
-            Sk.configure({output, read, killableWhile: true})
-            Sk.timeoutMsg = () => "Aborted"
-            Sk.JoBase = canvas
-
-            horizontal.onpointerdown = event => {
-                program.x = event.clientX
-
-                onpointermove = event => {
-                    const x = event.clientX - program.x
-
-                    left.style.width = left.offsetWidth + x + "px"
-                    program.x += x
+                if (error) {
+                    span.className = "error"
+                    span.textContent += "\n"
                 }
-            }
 
-            vertical.onpointerdown = event => {
-                program.y = event.clientY
-                
-                onpointermove = event => {
-                    const y = event.clientY - program.y
+                if (result.children.length > 1000)
+                    result.replaceChildren()
 
-                    canvas.style.height = canvas.offsetHeight + y + "px"
-                    program.y += y
-                }
+                result.scrollTop = result.scrollHeight
             }
 
             async function run() {
@@ -219,30 +191,7 @@
                 delete Sk.execLimit
             }
 
-            function read(file) {
-                if (Sk.builtinFiles.files[file])
-                    return Sk.builtinFiles.files[file]
-
-                if (file.match(/\/JoBase\./))
-                    return Sk.misceval.promiseToSuspension(fetch("JoBase.js").then(r => r.text()))
-            }
-
-            function output(text, error) {
-                const span = document.createElement("span")
-
-                span.textContent = text
-                result.appendChild(span)
-
-                if (error) {
-                    span.className = "error"
-                    span.textContent += "\n"
-                }
-
-                if (result.children.length > 1000)
-                    result.replaceChildren()
-
-                result.scrollTop = result.scrollHeight
-            }
+            start()
         </script>
     </body>
 </html>
