@@ -13,8 +13,8 @@ const $builtinmodule = () => {
     const call = (f, ...e) => Sk.misceval.callsimOrSuspend(f, ...e)
     const property = (g, s) => call(Sk.builtins.property, g, s)
     const isShape = e => Sk.builtin.isinstance(e, shape).v
-    const image = e => str(`https://jobase.org/Browser/images/${e}.png`)
-    const font = e => str(`https://jobase.org/Browser/fonts/${e}.ttf`)
+    const image = e => str(`https://jobase.org/Browser/JoBase/images/${e}.png`)
+    const font = e => str(`https://jobase.org/Browser/JoBase/fonts/${e}.ttf`)
     const wait = e => Sk.misceval.promiseToSuspension(new Promise(e))
 
     const shapeError = e => new Sk.builtin.TypeError(
