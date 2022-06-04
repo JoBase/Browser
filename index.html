@@ -191,6 +191,40 @@
                 delete Sk.execLimit
             }
 
+            async function start() {
+                const text = await (await fetch("JoBase/examples/coin_collector.py")).text()
+
+                mirror.setValue(localStorage.getItem("code") || text)
+                mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))
+                onmouseup = () => onpointermove = null
+
+                Sk.configure({output, killableWhile: true})
+                Sk.timeoutMsg = () => "Aborted"
+                Sk.JoBase = canvas
+
+                horizontal.onpointerdown = event => {
+                    program.x = event.clientX
+
+                    onpointermove = event => {
+                        const x = event.clientX - program.x
+
+                        left.style.width = left.offsetWidth + x + "px"
+                        program.x += x
+                    }
+                }
+
+                vertical.onpointerdown = event => {
+                    program.y = event.clientY
+                    
+                    onpointermove = event => {
+                        const y = event.clientY - program.y
+
+                        canvas.style.height = canvas.offsetHeight + y + "px"
+                        program.y += y
+                    }
+                }
+            }
+
             start()
         </script>
     </body>
