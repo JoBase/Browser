@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name = viewport content = "width = device-width, initial-scale = 1">
+        
+        <script src = https://jobase.org/Browser/skulpt/skulpt.min.js></script>
+        <script src = https://jobase.org/Browser/skulpt/skulpt-stdlib.js></script>
+
+        <style>
+            html, body {height: 100%}
+
+            body {
+                margin: 0;
+                overflow: hidden
+            }
+        </style>
+    </head>
+
+    <body>
+        <script>
+            Sk.configure({output: text => console.log(text)})
+            Sk.JoBase = document.body
+
+            Sk.misceval.asyncToPromise(
+                () => Sk.importMainWithBody("<stdin>", false, "", true)).catch(
+                    error => console.error(error.toString()))
+        </script>
+    </body>
+</html>

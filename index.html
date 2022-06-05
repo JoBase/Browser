@@ -131,6 +131,7 @@
             <div>
                 <button onclick = run()><i class = "fa-solid fa-gear" id = spin></i> Run</button>
                 <button onclick = cancel()><i class = "fa-solid fa-stop"></i> Stop</button>
+                <button onclick = download()><i class = "fa-solid fa-download"></i> Download</button>
             </div>
 
             <textarea id = code></textarea>
@@ -170,6 +171,11 @@
                 result.scrollTop = result.scrollHeight
             }
 
+            async function get(file) {
+                const data = await fetch(file)
+                return await data.text()
+            }
+
             async function run() {
                 await cancel()
 
@@ -193,14 +199,26 @@
                 delete Sk.execLimit
             }
 
+            async function download() {
+                const data = (await get("download.html")).replace(/""/, "`" + mirror.getValue() + "`")
+                const blob = new Blob([data], {type: "text/html"})
+                const link = document.createElement("a")
+                
+                link.href = URL.createObjectURL(blob)
+                link.download = "JoBase.html"
+                link.click()
+
+                URL.revokeObjectURL(link.href)
+            }
+
             async function start() {
-                const text = await (await fetch("JoBase/examples/coin_collector.py")).text()
+                const text = await get("JoBase/examples/coin_collector.py")
 
                 mirror.setValue(localStorage.getItem("code") || text)
                 mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))
                 onmouseup = () => onpointermove = null
 
-                Sk.configure({output, killableWhile: true})
+                Sk.configure({output})
                 Sk.timeoutMsg = () => "Aborted"
                 Sk.JoBase = canvas
 
