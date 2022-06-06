@@ -2,19 +2,20 @@
 <html>
     <head>
         <meta name = viewport content = "width = device-width, initial-scale = 1">
+        <link rel = icon href = assets/images/favicon.ico sizes = "16x16 32x32 48x48 64x64 110x110 114x114" type = image/vnd.microsoft.icon>
 
         <script async src = "https://www.googletagmanager.com/gtag/js?id=G-DKHQZ28TR3"></script>
-        <script src = /js/analytics.js></script>
+        <script src = /js/setup.js></script>
         <script src = skulpt/skulpt.min.js></script>
         <script src = skulpt/skulpt-stdlib.js></script>
 
-        <script src = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/codemirror.min.js></script>
-        <script src = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/mode/python/python.min.js></script>
-
-        <link rel = stylesheet href = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/codemirror.min.css>
-        <link rel = stylesheet href = https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/theme/material.min.css>
+        <script src = /assets/codemirror/lib/codemirror.js></script>
+        <script src = /assets/codemirror/mode/python/python.js></script>
+        
+        <link rel = stylesheet href = /assets/codemirror/lib/codemirror.css>
         <link rel = stylesheet href = /assets/fontawesome/css/fontawesome.min.css>
         <link rel = stylesheet href = /assets/fontawesome/css/all.min.css>
+        <link rel = stylesheet href = /css/color.css>
 
         <title>JoBase · Browser</title>
 
@@ -25,7 +26,7 @@
             body {
                 margin: 0;
                 padding: 1em;
-                background-color: #999;
+                background-color: var(--background);
                 display: flex;
                 overflow: hidden;
                 height: 100%
@@ -36,7 +37,8 @@
                 height: 100%;
                 font-size: 16px;
                 border-radius: 0.4em;
-                background-color: #ddd;
+                background-color: var(--blank);
+                color: var(--mark);
                 cursor: pointer;
                 padding-left: 0.5em;
                 padding-right: 0.5em;
@@ -44,9 +46,9 @@
                 margin: 0
             }
 
-            button:hover {
-                background-color: #fff
-            }
+            button:hover {background-color: var(--comment)}
+            canvas:focus {outline: none}
+            .error {color: #f33}
 
             section {
                 display: flex;
@@ -77,16 +79,14 @@
                 min-width: 0
             }
 
-            .error {color: #f33}
-
             .display pre {
                 flex: 1 1 0;
-                background-color: #333;
+                background-color: var(--block);
                 font-size: 16px;
                 padding: 0.5em;
                 margin: 0;
                 height: 100%;
-                color: #fff;
+                color: var(--code);
                 overflow-y: auto;
                 border-radius: 0.4em;
                 overflow-x: hidden;
@@ -96,7 +96,7 @@
 
             #left > div:first-child {
                 border-radius: 0.4em;
-                background-color: #bbb;
+                background-color: var(--button);
                 display: flex;
                 gap: 0.5em;
                 height: 2em
@@ -109,19 +109,26 @@
             }
 
             .display div:first-child {
-                -webkit-mask-image: -webkit-radial-gradient(#fff, #000);
                 mask-image: radial-gradient(#fff, #000);
+                overflow: hidden;
                 border-radius: 0.4em;
                 background-color: #fff;
                 height: 60%
             }
         
             .CodeMirror {
+                background-color: var(--block);
+                color: var(--code);
                 height: 100%;
                 margin: 0;
                 font-size: 16px;
                 border-radius: 0.4em;
                 flex-grow: 1
+            }
+
+            .CodeMirror-gutters {
+                background-color: var(--dim);
+                border-right: none
             }
         </style>
     </head>
@@ -149,7 +156,7 @@
             const program = {}
 
             const mirror = CodeMirror.fromTextArea(code, {
-                theme: "material",
+                theme: "none",
                 lineNumbers: true,
                 indentUnit: 4
             })
