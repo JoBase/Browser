@@ -768,9 +768,11 @@ const $builtinmodule = () => {
     module.run = def(() => wait((resolve, reject) => {
         const main = Sk.importModule("__main__", false, true)
 
-        const observer = new ResizeObserver(entries => {
-            canvas.width = entries[0].contentRect.width * devicePixelRatio
-            canvas.height = entries[0].contentRect.height * devicePixelRatio
+        const observer = new ResizeObserver(() => {
+            canvas.width = display.clientWidth * devicePixelRatio
+            canvas.height = display.clientHeight * devicePixelRatio
+            canvas.style.width = display.clientWidth + "px"
+            canvas.style.height = display.clientHeight + "px"
 
             module.window.$reisze = true
             gl.viewport(0, 0, canvas.width, canvas.height)
@@ -845,12 +847,10 @@ const $builtinmodule = () => {
     canvas.addEventListener("keydown", keyDown)
     canvas.addEventListener("keyup", keyUp)
 
-    canvas.tabIndex = 0
-    canvas.style.width = "100%"
-    canvas.style.height = "100%"
-
     print("Welcome to JoBase")
     display.replaceChildren(canvas)
+
+    canvas.tabIndex = 0
     canvas.focus()
 
     const vertexShader = gl.createShader(gl.VERTEX_SHADER)
