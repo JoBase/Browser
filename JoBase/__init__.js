@@ -1,7 +1,4 @@
 const $builtinmodule = () => {
-    const module = {}
-
-    const print = e => Sk.misceval.print_(`${e}\n`)
     const str = e => new Sk.builtin.str(e)
     const def = e => new Sk.builtin.func(e)
     const int = e => new Sk.builtin.int_(e)
@@ -16,9 +13,7 @@ const $builtinmodule = () => {
     const image = e => str(`https://jobase.org/Browser/JoBase/images/${e}.png`)
     const font = e => str(`https://jobase.org/Browser/JoBase/fonts/${e}.ttf`)
     const wait = e => Sk.misceval.promiseToSuspension(new Promise(e))
-
-    const shapeError = e => new Sk.builtin.TypeError(
-        "must be Shape instance or cursor, not " + e.tp$name)
+    const shapeError = e => new Sk.builtin.TypeError("must be Shape or cursor, not " + e.tp$name)
 
     const number = e => {
         if (e) {
@@ -57,14 +52,9 @@ const $builtinmodule = () => {
         return source
     }
 
-    const getWindowSize = () => [
-        canvas.width / devicePixelRatio,
-        canvas.height / devicePixelRatio
-    ]
-
     const getCursorPos = () => [
-        module.cursor.$pos[0] - getWindowSize()[0] / 2,
-        getWindowSize()[1] / 2 - module.cursor.$pos[1]
+        module.cursor.$pos[0] - canvas.width / 2,
+        canvas.height / 2 - module.cursor.$pos[1]
     ]
 
     const newMatrix = () => new Float32Array([
@@ -152,8 +142,8 @@ const $builtinmodule = () => {
     const viewMatrix = (matrix, view) => {
         const base = newMatrix()
 
-        base[0] = 2 / getWindowSize()[0]
-        base[5] = 2 / getWindowSize()[1]
+        base[0] = 2 / canvas.width
+        base[5] = 2 / canvas.height
         base[10] = -2 / (view[1] - view[0])
         base[14] = (-view[1] + view[0]) / (view[1] - view[0])
         mulMatrix(matrix, base)
@@ -336,12 +326,12 @@ const $builtinmodule = () => {
         }
     }
 
-    const display = Sk.JoBase
-    const canvas = document.createElement("canvas")
+    const canvas = Sk.JoBase
     const gl = canvas.getContext("webgl")
     const program = gl.createProgram()
     const mesh = gl.createBuffer()
     const empty = def(() => {})
+    const module = {}
 
     const textures = []
     const fonts = []
@@ -470,6 +460,7 @@ const $builtinmodule = () => {
             def((self, value) => setVector(value, self.$color)))
     }, "Shape")
 
+    Sk.misceval.print_("Welcome to JoBase\n")
     module.__name__ = str("JoBase")
 
     module.MAN = image("man")
@@ -533,17 +524,17 @@ const $builtinmodule = () => {
                 ["blue", getBlue, setBlue])),
             def((self, value) => gl.clearColor(...setVector(value, self.$color), 1)))
 
-        const getWidth = () => int(getWindowSize()[0])
-        const getHeight = () => int(getWindowSize()[1])
+        const getWidth = () => int(canvas.width)
+        const getHeight = () => int(canvas.height)
         
         locals.width = property(def(getWidth))
         locals.height = property(def(getHeight))
 
         locals.size = property(def(self => call(vector, self, ["x", getWidth], ["y", getHeight])))
-        locals.top = property(def(() => float(getWindowSize()[1] / 2)))
-        locals.bottom = property(def(() => float(getWindowSize()[1] / -2)))
-        locals.left = property(def(() => float(getWindowSize()[0] / -2)))
-        locals.right = property(def(() => float(getWindowSize()[0] / 2)))
+        locals.top = property(def(() => float(canvas.height / 2)))
+        locals.bottom = property(def(() => float(canvas.height / -2)))
+        locals.left = property(def(() => float(canvas.width / -2)))
+        locals.right = property(def(() => float(canvas.width / 2)))
         locals.resize = property(def(self => bool(self.$resize)))
     }, "Window"))
 
@@ -768,34 +759,11 @@ const $builtinmodule = () => {
     module.run = def(() => wait((resolve, reject) => {
         const main = Sk.importModule("__main__", false, true)
 
-        const observer = new ResizeObserver(() => {
-            canvas.width = display.clientWidth * devicePixelRatio
-            canvas.height = display.clientHeight * devicePixelRatio
-            canvas.style.width = display.clientWidth + "px"
-            canvas.style.height = display.clientHeight + "px"
-
-            module.window.$reisze = true
+        const observer = new MutationObserver(() => {
+            module.window.$resize = true
             gl.viewport(0, 0, canvas.width, canvas.height)
             update()
         })
-
-        const final = error => {
-            textures.forEach(e => gl.deleteTexture(e.source))
-
-            gl.deleteBuffer(mesh)
-            gl.deleteProgram(program)
-
-            canvas.removeEventListener("mouseenter", mouseEnter)
-            canvas.removeEventListener("mouseleave", mouseLeave)
-            canvas.removeEventListener("mousedown", mouseDown)
-            canvas.removeEventListener("mouseup", mouseUp)
-            canvas.removeEventListener("mousemove", mouseMove)
-            canvas.removeEventListener("keydown", keyDown)
-            canvas.removeEventListener("keyup", keyUp)
-
-            observer.disconnect()
-            error ? reject(error) : resolve()
-        }
 
         const update = () => {
             const matrix = newMatrix()
@@ -825,6 +793,24 @@ const $builtinmodule = () => {
             }
         }
 
+        const final = error => {
+            textures.forEach(e => gl.deleteTexture(e.source))
+
+            gl.deleteBuffer(mesh)
+            gl.deleteProgram(program)
+
+            canvas.removeEventListener("mouseenter", mouseEnter)
+            canvas.removeEventListener("mouseleave", mouseLeave)
+            canvas.removeEventListener("mousedown", mouseDown)
+            canvas.removeEventListener("mouseup", mouseUp)
+            canvas.removeEventListener("mousemove", mouseMove)
+            canvas.removeEventListener("keydown", keyDown)
+            canvas.removeEventListener("keyup", keyUp)
+
+            observer.disconnect()
+            error ? reject(error) : resolve()
+        }
+
         const loop = () => {
             if (module.window.$close)
                 return final()
@@ -835,7 +821,7 @@ const $builtinmodule = () => {
             } catch(e) {final(e)}
         }
 
-        observer.observe(display)
+        observer.observe(canvas, {attributes: true})
         loop()
     }))
 
@@ -846,12 +832,6 @@ const $builtinmodule = () => {
     canvas.addEventListener("mousemove", mouseMove)
     canvas.addEventListener("keydown", keyDown)
     canvas.addEventListener("keyup", keyUp)
-
-    print("Welcome to JoBase")
-    display.replaceChildren(canvas)
-
-    canvas.tabIndex = 0
-    canvas.focus()
 
     const vertexShader = gl.createShader(gl.VERTEX_SHADER)
     const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)

@@ -2,7 +2,7 @@
 <html>
     <head>
         <meta name = viewport content = "width = device-width, initial-scale = 1">
-        <link rel = icon href = /assets/images/favicon.ico sizes = "16x16 32x32 48x48 64x64 110x110 114x114" type = image/vnd.microsoft.icon>
+        <link rel = icon href = /assets/images/favicon.ico sizes = "16x16 32x32 48x48 64x64" type = image/vnd.microsoft.icon>
 
         <script async src = "https://www.googletagmanager.com/gtag/js?id=G-DKHQZ28TR3"></script>
         <script src = /js/setup.js></script>
@@ -44,6 +44,12 @@
                 padding-right: 0.5em;
                 transition-duration: 0.2s;
                 margin: 0
+            }
+
+            canvas {
+                border-radius: 0.4em;
+                background-color: #fff;
+                height: 60%
             }
 
             button:hover {background-color: var(--comment)}
@@ -107,14 +113,6 @@
                 gap: 0.5em;
                 width: 50%
             }
-
-            .display div:first-child {
-                mask-image: radial-gradient(#fff, #000);
-                overflow: hidden;
-                border-radius: 0.4em;
-                background-color: #fff;
-                height: 60%
-            }
         
             .CodeMirror {
                 background-color: var(--block);
@@ -147,7 +145,7 @@
         <div id = horizontal></div>
 
         <section class = display>
-            <div id = canvas></div>
+            <canvas id = canvas></canvas>
             <div id = vertical></div>
             <pre id = result></pre>
         </section>
@@ -250,6 +248,11 @@
                         program.y += y
                     }
                 }
+
+                new ResizeObserver(() => {
+                    canvas.width = canvas.offsetWidth * devicePixelRatio
+                    canvas.height = canvas.offsetHeight * devicePixelRatio
+                }).observe(canvas)
             }
 
             start()
