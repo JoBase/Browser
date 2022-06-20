@@ -151,8 +151,8 @@ const $builtinmodule = () => {
     const renderText = text => {
         const canvas = document.createElement("canvas")
         const context = canvas.getContext("2d")
-        const name = "px _" + fonts.indexOf(text.$font)
-        context.font = text.$fontSize + name
+        const name = text.$fontSize * devicePixelRatio + "px _" + fonts.indexOf(text.$font)
+        context.font = name
 
         const size = context.measureText(text.$content)
         const width = size.actualBoundingBoxRight - size.actualBoundingBoxLeft
@@ -160,10 +160,13 @@ const $builtinmodule = () => {
         const metrics = context.measureText("Sy")
         const height = metrics.actualBoundingBoxDescent + metrics.actualBoundingBoxAscent
 
-        text.$size[0] = canvas.width = width
-        text.$size[1] = canvas.height = height
+        canvas.width = width
+        canvas.height = height
 
-        context.font = text.$fontSize * devicePixelRatio + name
+        text.$size[0] = width / devicePixelRatio
+        text.$size[1] = height / devicePixelRatio
+
+        context.font = name
         context.fillStyle = "#fff"
         context.fillText(text.$content, 0, metrics.actualBoundingBoxAscent)
 
