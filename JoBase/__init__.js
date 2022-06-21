@@ -31,7 +31,7 @@ const $builtinmodule = () => {
         throw new Sk.builtin.TypeError("must be str, not " + e.tp$name)
     }
 
-    const property = (...args) => call(Sk.builtins.property, ...args)
+    const property = (...args) => call(Sk.builtin.property, ...args)
     const build = (...args) => Sk.misceval.buildClass(module, ...args)
     const call = (...args) => Sk.misceval.callsimOrSuspend(...args)
     const is = (...args) => Sk.builtin.isinstance(...args).v
@@ -148,43 +148,6 @@ const $builtinmodule = () => {
         return texture
     }
 
-    const renderText = text => {
-        const canvas = document.createElement("canvas")
-        const context = canvas.getContext("2d")
-        const name = text.$fontSize * devicePixelRatio + "px _" + fonts.indexOf(text.$font)
-        context.font = name
-
-        const size = context.measureText(text.$content)
-        const width = size.actualBoundingBoxRight - size.actualBoundingBoxLeft
-
-        const metrics = context.measureText("Sy")
-        const height = metrics.actualBoundingBoxDescent + metrics.actualBoundingBoxAscent
-
-        canvas.width = width
-        canvas.height = height
-
-        text.$size[0] = width / devicePixelRatio
-        text.$size[1] = height / devicePixelRatio
-
-        context.font = name
-        context.fillStyle = "#fff"
-        context.fillText(text.$content, 0, metrics.actualBoundingBoxAscent)
-
-        gl.deleteTexture(text.$texture)
-        text.$texture = createImage(canvas)
-    }
-
-    const loadFont = font => new Promise((resolve, reject) => {
-        if (fonts.includes(font))
-            return resolve()
-        
-        new FontFace("_" + fonts.length, `url(${font})`).load().then(face => {
-            document.fonts.add(face)
-            fonts.push(font)
-            resolve()
-        }).catch(() => reject(file(`failed to load font: "${font}"`)))
-    })
-
     const setUniform = (matrix, color) => {
         gl.uniform4fv(gl.getUniformLocation(program, "color"), new Float32Array(color))
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "object"), false, new Float32Array(matrix))
@@ -212,7 +175,7 @@ const $builtinmodule = () => {
         gl.drawArrays(mode, 0, count)
     }
 
-    const collidesWith = def((self, other) => {
+    const collide = def((self, other) => {
         if (is(self, module.Rectangle)) {
             if (is(other, module.Rectangle))
                 return bool(collidePolyPoly(getRectPoly(self), getRectPoly(other)))
@@ -228,7 +191,7 @@ const $builtinmodule = () => {
                 return bool(collidePolyPoint(getRectPoly(other), [x(), y()]))
 
             else if (other == module.cursor)
-                return Sk.builtins.bool.true$
+                return Sk.builtin.bool.true$
 
             object(other)
         }
@@ -244,7 +207,7 @@ const $builtinmodule = () => {
             else if (Sk.builtin.checkSequence(value))
                 array.forEach((e, i, a) => a[i] = i < value.v.length ? value.v[i].v : e)
 
-            else throw new Sk.builtins.TypeError("attribute must be a sequence of values")
+            else throw new Sk.builtin.TypeError("attribute must be a sequence of values")
             return array
         },
 
@@ -258,7 +221,19 @@ const $builtinmodule = () => {
             return value
         },
 
-        class: build((_globals, locals) => {    
+        class: build((_globals, locals) => {
+            const calc = (self, other, type) => {
+                if (Sk.builtin.checkNumber(other))
+                    return tuple(self.$get().map(e => float(eval(e + type + number(other)))))
+
+                if (is(other, vector.class))                
+                    return tuple(Array.from({
+                        length: Math.max(self.$data.length, other.$data.length)
+                    }).map((_e, i) => float(eval((self.$get()[i] || 0) + type + (other.$get()[i] || 0)))))
+
+                throw new Sk.builtin.TypeError("must be Vector or number, not " + other.tp$name)
+            }
+
             locals.__getattr__ = def((self, name) => {
                 const index = self.$data.findIndex(e => e.name == name.v)
                 if (index != -1) return float(self.$get()[index])
@@ -268,9 +243,22 @@ const $builtinmodule = () => {
                 const item = self.$data.find(e => e.name == name.v)
                 item && item.set(self.$parent, value)
             })
+
+            locals.__add__ = def((self, other) => calc(self, other, "+"))
+            locals.__sub__ = def((self, other) => calc(self, other, "-"))
+            locals.__mul__ = def((self, other) => calc(self, other, "*"))
+            locals.__truediv__ = def((self, other) => calc(self, other, "/"))
+
+            locals.__getitem__ = def((self, index) => {
+                if (index >= self.$get().length)
+                    throw new Sk.builtin.IndexError("index out of range")
+
+                return self.$get()[index]
+            })
     
-            locals.__str__ = def(self => str(`(${self.$get().join(", ")})`))
-            locals.__repr__ = def(self => str(`[${self.$get().join(", ")}]`))
+            locals.__len__ = def(s => int(s.$data.length))
+            locals.__str__ = def(s => str(`(${s.$get().join(", ")})`))
+            locals.__repr__ = def(s => str(`[${s.$get().join(", ")}]`))
         }, "Vector")
     }
 
@@ -284,7 +272,7 @@ const $builtinmodule = () => {
         },
 
         class: build((_globals, locals) => {
-            locals.collides_with = collidesWith
+            locals.collides_with = collide
 
             locals.look_at = def((self, other) => {
                 const set = (x, y) => {
@@ -705,6 +693,43 @@ const $builtinmodule = () => {
     }, "Image", [module.Rectangle])
 
     module.Text = build((_globals, locals) => {
+        const render = self => {
+            const canvas = document.createElement("canvas")
+            const context = canvas.getContext("2d")
+            const name = self.$fontSize * devicePixelRatio + "px _" + fonts.indexOf(self.$font)
+            context.font = name
+    
+            const size = context.measureText(self.$content)
+            const width = size.actualBoundingBoxRight - size.actualBoundingBoxLeft
+    
+            const metrics = context.measureText("Sy")
+            const height = metrics.actualBoundingBoxDescent + metrics.actualBoundingBoxAscent
+    
+            canvas.width = width
+            canvas.height = height
+    
+            self.$size[0] = width / devicePixelRatio
+            self.$size[1] = height / devicePixelRatio
+    
+            context.font = name
+            context.fillStyle = "#fff"
+            context.fillText(self.$content, 0, metrics.actualBoundingBoxAscent)
+    
+            gl.deleteTexture(self.$texture)
+            self.$texture = createImage(canvas)
+        }
+    
+        const load = font => new Promise((resolve, reject) => {
+            if (fonts.includes(font))
+                return resolve()
+            
+            new FontFace("_" + fonts.length, `url(${font})`).load().then(face => {
+                document.fonts.add(face)
+                fonts.push(font)
+                resolve()
+            }).catch(() => reject(file(`failed to load font: "${font}"`)))
+        })
+
         const init = (self, content, x, y, fontSize, angle, color, font) => wait((resolve, reject) => {
             call(module.Rectangle.prototype.__init__, self, x, y, int(), int(), angle, color)
 
@@ -712,8 +737,8 @@ const $builtinmodule = () => {
             self.$fontSize = number(fontSize)
             self.$content = string(content)
 
-            loadFont(self.$font).then(() => {
-                renderText(self)
+            load(self.$font).then(() => {
+                render(self)
                 resolve()
             }).catch(reject)
         })
@@ -732,14 +757,14 @@ const $builtinmodule = () => {
             def(self => str(self.$content)),
             def((self, value) => {
                 self.$content = string(value)
-                renderText(self)
+                render(self)
             }))
 
         locals.font = property(
             def(self => str(self.$font)),
             def((self, value) => wait((resolve, reject) => {
-                loadFont(self.$font = string(value)).then(() => {
-                    renderText(self)
+                load(self.$font = string(value)).then(() => {
+                    render(self)
                     resolve()
                 }).catch(reject)
             })))
@@ -748,7 +773,7 @@ const $builtinmodule = () => {
             def(self => float(self.$font_size)),
             def((self, value) => {
                 self.$font_size = number(value)
-                renderText(self)
+                render(self)
             }))
     }, "Text", [module.Rectangle])
 

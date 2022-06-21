@@ -223,7 +223,7 @@
                 mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))
                 onmouseup = () => onpointermove = null
 
-                Sk.configure({output,})
+                Sk.configure({output})
                 Sk.timeoutMsg = () => "Aborted"
                 Sk.JoBase = canvas
 
