@@ -175,6 +175,40 @@ const $builtinmodule = () => {
         gl.drawArrays(mode, 0, count)
     }
 
+    const update = (other, set) => {
+        if (other == module.cursor) set(x(), y())
+        else if (is(other, shape.class)) set(...other.$pos)
+        else object(other)
+    }
+
+    const moveToward = def((self, other, speed) => {
+        const pixels = number(speed || int(1))
+    
+        update(other, (x, y) => {
+            const a = x - self.$pos[0]
+            const b = y - self.$pos[1]
+
+            if (Math.hypot(a, b) < pixels) {
+                self.$pos[0] += a
+                self.$pos[1] += b
+            }
+
+            else {
+                self.$pos[0] += Math.cos(Math.atan2(b, a)) * pixels
+                self.$pos[1] += Math.sin(Math.atan2(b, a)) * pixels
+            }
+        })
+    })
+
+    const moveSmooth = def((self, other, speed) => {
+        const pixels = number(speed || float(.1))
+    
+        update(other, (x, y) => {
+            self.$pos[0] += (x - self.$pos[0]) * pixels;
+            self.$pos[1] += (y - self.$pos[1]) * pixels;
+        })
+    })
+
     const collide = def((self, other) => {
         if (is(self, module.Rectangle)) {
             if (is(other, module.Rectangle))
@@ -273,38 +307,12 @@ const $builtinmodule = () => {
 
         class: build((_globals, locals) => {
             locals.collides_with = collide
+            locals.move_toward = moveToward
 
-            locals.look_at = def((self, other) => {
-                const set = (x, y) => {
-                    const angle = Math.atan2(y - self.$pos[1], x - self.$pos[0])
-                    self.$angle = angle * 180 / Math.PI
-                }
-    
-                other == module.cursor ? set(x(), y()) : is(
-                    other, shape.class) ? set(...other.$pos) : object(other)
-            })
-    
-            locals.move_toward = def((self, other, speed) => {
-                const pixels = number(speed) ?? 1
-    
-                const set = (x, y) => {
-                    const a = x - self.$pos[0]
-                    const b = y - self.$pos[1]
-    
-                    if (Math.hypot(a, b) < pixels) {
-                        self.$pos[0] += a
-                        self.$pos[1] += b
-                    }
-    
-                    else {
-                        self.$pos[0] += Math.cos(Math.atan2(b, a)) * pixels
-                        self.$pos[1] += Math.sin(Math.atan2(b, a)) * pixels
-                    }
-                }
-    
-                other == module.cursor ? set(x(), y()) : is(
-                    other, shape.class) ? set(...other.$pos) : object(other)
-            })
+            locals.look_at = def((self, other) => update(other, (x, y) => {
+                const angle = Math.atan2(y - self.$pos[1], x - self.$pos[0])
+                self.$angle = angle * 180 / Math.PI
+            }))
 
             const x = (self, value) => self.$pos[0] = number(value)
             const y = (self, value) => self.$pos[1] = number(value)
@@ -605,7 +613,10 @@ const $builtinmodule = () => {
 
         init.$defaults = [int(), int()]
         init.co_varnames = ["self", "x", "y"]
+
         locals.__init__ = def(init)
+        locals.move_toward = moveToward
+        locals.move_toward_smooth = moveSmooth
 
         const x = (self, value) => self.$pos[0] = number(value)
         const y = (self, value) => self.$pos[1] = number(value)
