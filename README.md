@@ -1,5 +1,5 @@
 # JoBase Browser
-**JavaScript implementation of JoBase**
+**JavaScript Implementation of JoBase**
 
 This is a JavaScript implementation of JoBase in the browser.
 It is based on the WebGL API.
