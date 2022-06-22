@@ -36,6 +36,7 @@ const $builtinmodule = () => {
     const call = (...args) => Sk.misceval.callsimOrSuspend(...args)
     const is = (...args) => Sk.builtin.isinstance(...args).v
     const wait = e => Sk.misceval.promiseToSuspension(new Promise(e))
+    const promise = e => Sk.misceval.asyncToPromise(() => e)
     const file = e => new Sk.builtin.FileNotFoundError(e)
     const object = e => {throw new Sk.builtin.TypeError("must be Shape or cursor, not " + e.tp$name)}
 
@@ -819,7 +820,7 @@ const $builtinmodule = () => {
     })
 
     module.run = def(() => wait((resolve, reject) => {
-        const update = () => {
+        const update = async () => {
             const final = error => {
                 gl.deleteBuffer(mesh)
                 gl.deleteProgram(program)
@@ -855,8 +856,9 @@ const $builtinmodule = () => {
             gl.uniformMatrix4fv(gl.getUniformLocation(program, "camera"), false, matrix)
             gl.clear(gl.COLOR_BUFFER_BIT)
 
-            try {process.main.$d.loop && call(process.main.$d.loop)}
-            catch (e) {final(e)}
+            if (process.main.$d.loop)
+                try {await promise(call(process.main.$d.loop))}
+                catch (e) {final(e)}
 
             module.window.$resize = false
             module.cursor.$move = false
