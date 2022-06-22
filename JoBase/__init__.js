@@ -806,9 +806,9 @@ const $builtinmodule = () => {
             })))
 
         locals.font_size = property(
-            def(self => float(self.$font_size)),
+            def(self => float(self.$fontSize)),
             def((self, value) => {
-                self.$font_size = number(value)
+                self.$fontSize = number(value)
                 render(self)
             }))
     }, "Text", [module.Rectangle])
