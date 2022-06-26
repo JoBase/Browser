@@ -45,12 +45,22 @@ const $builtinmodule = () => {
     const height = () => canvas.height / devicePixelRatio
     const x = () => module.cursor.$x - width() / 2
     const y = () => height() / 2 - module.cursor.$y
+    const average = e => (e[0] + e[1]) / 2
     const blank = () => {}
 
     const getPolyLeft = poly => poly.reduce((a, b) => b[0] < a ? b[0] : a, poly[0][0])
     const getPolyTop = poly => poly.reduce((a, b) => b[1] > a ? b[1] : a, poly[0][1])
     const getPolyRight = poly => poly.reduce((a, b) => b[0] > a ? b[0] : a, poly[0][0])
     const getPolyBottom = poly => poly.reduce((a, b) => b[1] < a ? b[1] : a, poly[0][1])
+
+    const getCenter = base => {
+        const angle = base.$angle * Math.PI / 180
+        
+        return [
+            base.$pos[0] + base.$anchor[0] * Math.cos(angle) - base.$anchor[1] * Math.sin(angle),
+            base.$pos[1] + base.$anchor[1] * Math.cos(angle) + base.$anchor[0] * Math.sin(angle)
+        ]
+    }
 
     const mouseEnter = () => module.cursor.$enter = true
     const mouseLeave = () => module.cursor.$leave = true
@@ -96,12 +106,40 @@ const $builtinmodule = () => {
         key && (key.release = true) && (key.hold = false)
     }
 
+    const collideCircleCircle = (p1, r1, p2, r2) => {
+        return Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) < r1 + r2
+    }
+
+    const collideCirclePoint = (pos, radius, point) => {
+        return Math.hypot(point[0] - pos[0], point[1] - pos[1]) < radius
+    }
+
     const collideLineLine = (p1, p2, p3, p4) => {
         const value = (p4[1] - p3[1]) * (p2[0] - p1[0]) - (p4[0] - p3[0]) * (p2[1] - p1[1]);
         const u1 = ((p4[0] - p3[0]) * (p1[1] - p3[1]) - (p4[1] - p3[1]) * (p1[0] - p3[0])) / value
         const u2 = ((p2[0] - p1[0]) * (p1[1] - p3[1]) - (p2[1] - p1[1]) * (p1[0] - p3[0])) / value
     
         return u1 >= 0 && u1 <= 1 && u2 >= 0 && u2 <= 1
+    }
+
+    const collideLinePoint = (p1, p2, point) => {
+        const d1 = Math.hypot(point[0] - p1[0], point[1] - p1[1])
+        const d2 = Math.hypot(point[0] - p2[0], point[1] - p2[1])
+        const length = Math.hypot(p1[0] - p2[0], p1[1] - p2[1])
+    
+        return d1 + d2 >= length - .1 && d1 + d2 <= length + .1
+    }
+
+    const collideLineCircle = (p1, p2, pos, radius) => {
+        if (collideCirclePoint(pos, radius, p1) || collideCirclePoint(pos, radius, p2))
+            return true
+    
+        const length = Math.hypot(p1[0] - p2[0], p1[1] - p2[1])
+        const dot = ((pos[0] - p1[0]) * (p2[0] - p1[0]) + (pos[1] - p1[1]) * (p2[1] - p1[1])) / length ** 2
+        const point = [p1[0] + dot * (p2[0] - p1[0]), p1[1] + dot * (p2[1] - p1[1])]
+    
+        return collideLinePoint(p1, p2, point) ? Math.hypot(
+            point[0] - pos[0], point[1] - pos[1]) <= radius : false
     }
     
     const collidePolyLine = (poly, p1, p2) => poly.find(
@@ -118,6 +156,9 @@ const $builtinmodule = () => {
             (e[1] < point[1] && v[1] > point[1])) ? !s : s
     }, false)
 
+    const collidePolyCircle = (poly, pos, radius) => poly.find(
+        (e, i, a) => collideLineCircle(e, a[i + 1 == a.length ? 0 : i + 1], pos, radius))
+
     const rotPoly = (poly, angle, pos) => {
         const cos = Math.cos(angle * Math.PI / 180)
         const sin = Math.sin(angle * Math.PI / 180)
@@ -129,9 +170,17 @@ const $builtinmodule = () => {
     }
 
     const getRectPoly = rect => {
-        const px = rect.$anchor[0] + rect.$size[0] * rect.$scale[0] / 2
-        const py = rect.$anchor[1] + rect.$size[1] * rect.$scale[1] / 2
-        const poly = [[-px, py], [px, py], [px, -py], [-px, -py]]
+        const ax = rect.$anchor[0]
+        const ay = rect.$anchor[1]
+        const px = rect.$size[0] * rect.$scale[0] / 2
+        const py = rect.$size[1] * rect.$scale[1] / 2
+
+        const poly = [
+            [ax - px, ay + py],
+            [ax + px, ay + py],
+            [ax + px, ay - py],
+            [ax - px, ay - py]
+        ]
     
         return rotPoly(poly, rect.$angle, rect.$pos)
     }
@@ -154,9 +203,9 @@ const $builtinmodule = () => {
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "object"), false, new Float32Array(matrix))
     }
 
-    const drawShape = (shape, size, buffer, mode, image, count) => {
-        const sx = size[0] * shape.$scale[0]
-        const sy = size[1] * shape.$scale[1]
+    const setMatrix = (shape, width, height) => {
+        const sx = width * shape.$scale[0]
+        const sy = height * shape.$scale[1]
         const ax = shape.$anchor[0]
         const ay = shape.$anchor[1]
         const px = shape.$pos[0]
@@ -170,10 +219,21 @@ const $builtinmodule = () => {
             0, 0, 1, 0,
             ax * c + ay * -s + px, ax * s + ay * c + py, 0, 1
         ], shape.$color)
+    }
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-        gl.uniform1i(gl.getUniformLocation(program, "image"), image)
-        gl.drawArrays(mode, 0, count)
+    const drawRect = (rect, type) => {
+        setMatrix(rect, rect.$size[0], rect.$size[1])
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, mesh)
+        gl.vertexAttribPointer(gl.getAttribLocation(program, "vertex"), 2, gl.FLOAT, false, 16, 0)
+        gl.vertexAttribPointer(gl.getAttribLocation(program, "coordinate"), 2, gl.FLOAT, false, 16, 8)
+        gl.enableVertexAttribArray(0)
+        gl.enableVertexAttribArray(1)
+
+        gl.uniform1i(gl.getUniformLocation(program, "image"), type)
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+        gl.disableVertexAttribArray(0)
+        gl.disableVertexAttribArray(1)
     }
 
     const update = (other, set) => {
@@ -215,8 +275,32 @@ const $builtinmodule = () => {
             if (is(other, module.Rectangle))
                 return bool(collidePolyPoly(getRectPoly(self), getRectPoly(other)))
 
-            else if (other == module.cursor)
+            if (is(other, module.Circle))
+                return bool(collidePolyCircle(
+                    getRectPoly(self), getCenter(other),
+                    other.$radius * average(other.$scale)))
+
+            if (other == module.cursor)
                 return bool(collidePolyPoint(getRectPoly(self), [x(), y()]))
+
+            object(other)
+        }
+
+        if (is(self, module.Circle)) {
+            if (is(other, module.Rectangle))
+                return bool(collidePolyCircle(
+                    getRectPoly(other), getCenter(self),
+                    self.$radius * average(self.$scale)))
+
+            if (is(other, module.Circle))
+                return bool(collideCircleCircle(
+                    getCenter(self), self.$radius * average(self.$scale),
+                    getCenter(other), other.$radius * average(other.$scale)))
+
+            if (other == module.cursor)
+                return bool(collideCirclePoint(
+                    getCenter(self), self.$radius * average(self.$scale),
+                    [x(), y()]))
 
             object(other)
         }
@@ -225,7 +309,12 @@ const $builtinmodule = () => {
             if (is(other, module.Rectangle))
                 return bool(collidePolyPoint(getRectPoly(other), [x(), y()]))
 
-            else if (other == module.cursor)
+            if (is(other, module.Circle))
+                return bool(collideCirclePoint(
+                    getCenter(other), other.$radius * average(other.$scale),
+                    [x(), y()]))
+
+            if (other == module.cursor)
                 return Sk.builtin.bool.true$
 
             object(other)
@@ -670,7 +759,7 @@ const $builtinmodule = () => {
         init.co_varnames = ["self", "x", "y", "width", "height", "angle", "color"]
 
         locals.__init__ = def(init)
-        locals.draw = def(self => drawShape(self, self.$size, mesh, gl.TRIANGLE_STRIP, false, 4))
+        locals.draw = def(drawRect)
 
         const width = (self, value) => self.$size[0] = number(value)
         const height = (self, value) => self.$size[1] = number(value)
@@ -725,7 +814,7 @@ const $builtinmodule = () => {
         locals.draw = def(self => {
             gl.activeTexture(gl.TEXTURE0)
             gl.bindTexture(gl.TEXTURE_2D, self.$texture)
-            drawShape(self, self.$size, mesh, gl.TRIANGLE_STRIP, true, 4)
+            drawRect(self, true)
         })
     }, "Image", [module.Rectangle])
 
@@ -787,7 +876,7 @@ const $builtinmodule = () => {
         locals.draw = def(self => {
             gl.activeTexture(gl.TEXTURE0)
             gl.bindTexture(gl.TEXTURE_2D, self.$texture)
-            drawShape(self, self.$size, mesh, gl.TRIANGLE_STRIP, true, 4)
+            drawRect(self, true)
         })
 
         locals.content = property(
@@ -813,6 +902,68 @@ const $builtinmodule = () => {
                 render(self)
             }))
     }, "Text", [module.Rectangle])
+
+    module.Circle = build((_globals, locals) => {
+        const vertices = self => ~~(Math.sqrt(Math.abs(self.$radius * average(self.$scale))) * 4) + 4
+
+        const data = self => {
+            const number = vertices(self) - 2
+            const data = [0, 0]
+
+            for (let i = 0; i <= number; i ++) {
+                const angle = Math.PI * 2 * i / number
+
+                data[i * 2 + 2] = Math.cos(angle) / 2
+                data[i * 2 + 3] = Math.sin(angle) / 2
+            }
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, self.$vbo)
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.DYNAMIC_DRAW)
+        }
+
+        const init = (self, x, y, diameter, color) => {
+            shape.new(self, x, y, int(), color)
+
+            self.$top = () => getCenter(self)[1] + self.$radius * self.$scale[1]
+            self.$left = () => getCenter(self)[0] - self.$radius * self.$scale[0]
+            self.$bottom = () => getCenter(self)[1] - self.$radius * self.$scale[1]
+            self.$right = () => getCenter(self)[0] + self.$radius * self.$scale[0]
+
+            self.$radius = diameter / 2
+            self.$vbo = gl.createBuffer()
+            data(self)
+        }
+
+        init.$defaults = [int(), int(), int(50), tuple()]
+        init.co_varnames = ["self", "x", "y", "diameter", "color"]
+        locals.__init__ = def(init)
+
+        locals.draw = def(self => {
+            setMatrix(self, self.$radius * 2, self.$radius * 2)
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, self.$vbo)
+            gl.vertexAttribPointer(gl.getAttribLocation(program, "vertex"), 2, gl.FLOAT, false, 0, 0)
+            gl.enableVertexAttribArray(0)
+
+            gl.uniform1i(gl.getUniformLocation(program, "image"), false)
+            gl.drawArrays(gl.TRIANGLE_FAN, 0, vertices(self))
+            gl.disableVertexAttribArray(0)
+        })
+
+        const scaleX = (self, value) => {
+            self.$scale[0] = number(value)
+            data(self)
+        }
+
+        const scaleY = (self, value) => {
+            self.$scale[1] = number(value)
+            data(self)
+        }
+
+        locals.scale = property(
+            def(self => vector.new(self, () => self.$scale, ["x", scaleX], ["y", scaleY])),
+            def((self, value) => vector.set(value, self.$scale) && data(self)))
+    }, "Circle", [shape.class])
 
     module.random = def((a, b) => {
         const min = Math.min(number(a), number(b))
@@ -956,11 +1107,6 @@ const $builtinmodule = () => {
         -.5, -.5, 0, 1,
         .5, -.5, 1, 1
     ]), gl.STATIC_DRAW)
-
-    gl.vertexAttribPointer(gl.getAttribLocation(program, "vertex"), 2, gl.FLOAT, false, 16, 0)
-    gl.vertexAttribPointer(gl.getAttribLocation(program, "coordinate"), 2, gl.FLOAT, false, 16, 8)
-    gl.enableVertexAttribArray(0)
-    gl.enableVertexAttribArray(1)
 
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
