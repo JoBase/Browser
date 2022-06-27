@@ -31,6 +31,11 @@ const $builtinmodule = () => {
         throw new Sk.builtin.TypeError("must be str, not " + e.tp$name)
     }
 
+    const sequence = e => {
+        if (Sk.builtin.checkSequence(e)) return e.v
+        throw new Sk.builtin.TypeError("must be sequence, not " + e.tp$name)
+    }
+
     const property = (...args) => call(Sk.builtin.property, ...args)
     const build = (...args) => Sk.misceval.buildClass(module, ...args)
     const call = (...args) => Sk.misceval.callsimOrSuspend(...args)
@@ -38,7 +43,7 @@ const $builtinmodule = () => {
     const wait = e => Sk.misceval.promiseToSuspension(new Promise(e))
     const promise = e => Sk.misceval.asyncToPromise(() => e)
     const file = e => new Sk.builtin.FileNotFoundError(e)
-    const object = e => {throw new Sk.builtin.TypeError("must be Shape or cursor, not " + e.tp$name)}
+    const object = e => {throw new Sk.builtin.TypeError("must be Base or cursor, not " + e.tp$name)}
 
     const path = file => str("https://jobase.org/Browser/JoBase/" + file)
     const width = () => canvas.width / devicePixelRatio
@@ -106,6 +111,60 @@ const $builtinmodule = () => {
         key && (key.release = true) && (key.hold = false)
     }
 
+    const polyPositive = poly => poly.reduce((s, e, i, a) => {
+        const v = a[i ? i - 1 : a.length - 1]
+        return s + v[0] * e[1] - e[0] * v[1]
+    }, 0) / 2 > 0
+    
+    const polyInside = (a, b, c, p) => {
+        const ab = (c[0] - b[0]) * (p[1] - b[1]) - (c[1] - b[1]) * (p[0] - b[0])
+        const ca = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+        const bc = (a[0] - c[0]) * (p[1] - c[1]) - (a[1] - c[1]) * (p[0] - c[0])
+    
+        return ab >= 0 && ca >= 0 && bc >= 0
+    }
+    
+    const polySnip = (poly, u, v, w, next, verts) => {
+        const a = poly[verts[u]]
+        const b = poly[verts[v]]
+        const c = poly[verts[w]]
+    
+        if (Number.EPSILON > (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]))
+            return false
+    
+        for (let i = 0; i < next; i ++)
+            if (i != u && i != v && i != w && polyInside(a, b, c, poly[verts[i]]))
+                return false
+    
+        return true
+    }
+    
+    const polySplit = poly => {
+        const data = []
+        const verts = polyPositive(poly) ? poly.map((_, i) => i) : poly.map((_, i, a) => a.length - 1 - i)
+    
+        for (let n = poly.length, v = n - 1, c = n * 2; n > 2;) {
+            if (c -- <= 0)
+                throw new Sk.builtin.TypeError("failed to understand shape - probably because the edges overlap")
+    
+            const u = n > v ? v : 0
+            v = n > u + 1 ? u + 1 : 0
+            const w = n > v + 1 ? v + 1 : 0
+    
+            if (polySnip(poly, u, v, w, n, verts)) {
+                data.push(verts[u], verts[v], verts[w])
+    
+                for (let s = v, t = v + 1; t < n; s ++, t ++)
+                    verts[s] = verts[t]
+    
+                n --
+                c = n * 2
+            }
+        }
+
+        return data
+    }    
+
     const collideCircleCircle = (p1, r1, p2, r2) => {
         return Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) < r1 + r2
     }
@@ -143,13 +202,13 @@ const $builtinmodule = () => {
     }
     
     const collidePolyLine = (poly, p1, p2) => poly.find(
-        (e, i, a) => collideLineLine(p1, p2, e, a[i + 1 == a.length ? 0 : i + 1]))
+        (e, i, a) => collideLineLine(p1, p2, e, a[i ? i - 1 : a.length - 1]))
 
     const collidePolyPoly = (p1, p2) => collidePolyPoint(p1, p2[0]) || collidePolyPoint(p2, p1[0]) || p1.find(
-        (e, i, a) => collidePolyLine(p2, e, a[i + 1 == a.length ? 0 : i + 1]))
+        (e, i, a) => collidePolyLine(p2, e, a[i ? i - 1 : a.length - 1]))
     
     const collidePolyPoint = (poly, point) => poly.reduce((s, e, i, a) => {
-        const v = a[i + 1 == a.length ? 0 : i + 1]
+        const v = a[i ? i - 1 : a.length - 1]
 
         return (point[0] < (v[0] - e[0]) * (point[1] - e[1]) / (v[1] - e[1]) + e[0]) &&
             ((e[1] > point[1] && v[1] < point[1]) ||
@@ -157,7 +216,7 @@ const $builtinmodule = () => {
     }, false)
 
     const collidePolyCircle = (poly, pos, radius) => poly.find(
-        (e, i, a) => collideLineCircle(e, a[i + 1 == a.length ? 0 : i + 1], pos, radius))
+        (e, i, a) => collideLineCircle(e, a[i ? i - 1 : a.length - 1], pos, radius))
 
     const rotPoly = (poly, angle, pos) => {
         const cos = Math.cos(angle * Math.PI / 180)
@@ -185,6 +244,9 @@ const $builtinmodule = () => {
         return rotPoly(poly, rect.$angle, rect.$pos)
     }
 
+    const getShapePoly = shape => rotPoly(shape.$data.map(
+        e => e.map((e, i) => e + shape.$anchor[i])), shape.$angle, shape.$pos)
+
     const createImage = image => {
         const texture = gl.createTexture()
         gl.bindTexture(gl.TEXTURE_2D, texture)
@@ -203,22 +265,22 @@ const $builtinmodule = () => {
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "object"), false, new Float32Array(matrix))
     }
 
-    const setMatrix = (shape, width, height) => {
-        const sx = width * shape.$scale[0]
-        const sy = height * shape.$scale[1]
-        const ax = shape.$anchor[0]
-        const ay = shape.$anchor[1]
-        const px = shape.$pos[0]
-        const py = shape.$pos[1]
-        const s = Math.sin(shape.$angle * Math.PI / 180)
-        const c = Math.cos(shape.$angle * Math.PI / 180)
+    const setMatrix = (base, width, height) => {
+        const sx = width * base.$scale[0]
+        const sy = height * base.$scale[1]
+        const ax = base.$anchor[0]
+        const ay = base.$anchor[1]
+        const px = base.$pos[0]
+        const py = base.$pos[1]
+        const s = Math.sin(base.$angle * Math.PI / 180)
+        const c = Math.cos(base.$angle * Math.PI / 180)
     
         setUniform([
             sx * c, sx * s, 0, 0,
             sy * -s, sy * c, 0, 0,
             0, 0, 1, 0,
             ax * c + ay * -s + px, ax * s + ay * c + py, 0, 1
-        ], shape.$color)
+        ], base.$color)
     }
 
     const drawRect = (rect, type) => {
@@ -238,7 +300,7 @@ const $builtinmodule = () => {
 
     const update = (other, set) => {
         if (other == module.cursor) set(x(), y())
-        else if (is(other, shape.class)) set(...other.$pos)
+        else if (is(other, base.class)) set(...other.$pos)
         else object(other)
     }
 
@@ -280,6 +342,9 @@ const $builtinmodule = () => {
                     getRectPoly(self), getCenter(other),
                     other.$radius * average(other.$scale)))
 
+            if (is(other, module.Shape))
+                return bool(collidePolyPoly(getRectPoly(self), getShapePoly(other)))
+
             if (other == module.cursor)
                 return bool(collidePolyPoint(getRectPoly(self), [x(), y()]))
 
@@ -297,10 +362,33 @@ const $builtinmodule = () => {
                     getCenter(self), self.$radius * average(self.$scale),
                     getCenter(other), other.$radius * average(other.$scale)))
 
+            if (is(other, module.Shape))
+                return bool(collidePolyCircle(
+                    getShapePoly(other), getCenter(self),
+                    self.$radius * average(self.$scale)))
+
             if (other == module.cursor)
                 return bool(collideCirclePoint(
                     getCenter(self), self.$radius * average(self.$scale),
                     [x(), y()]))
+
+            object(other)
+        }
+
+        if (is(self, module.Shape)) {
+            if (is(other, module.Rectangle))
+                return bool(collidePolyPoly(getShapePoly(self), getRectPoly(other)))
+
+            if (is(other, module.Circle))
+                return bool(collidePolyCircle(
+                    getShapePoly(self), getCenter(other),
+                    other.$radius * average(other.$scale)))
+
+            if (is(other, module.Shape))
+                return bool(collidePolyPoly(getShapePoly(self), getShapePoly(other)))
+
+            if (other == module.cursor)
+                return bool(collidePolyPoint(getShapePoly(self), [x(), y()]))
 
             object(other)
         }
@@ -313,6 +401,9 @@ const $builtinmodule = () => {
                 return bool(collideCirclePoint(
                     getCenter(other), other.$radius * average(other.$scale),
                     [x(), y()]))
+
+            if (is(other, module.Shape))
+                return bool(collidePolyPoint(getShapePoly(other), [x(), y()]))
 
             if (other == module.cursor)
                 return Sk.builtin.bool.true$
@@ -327,6 +418,8 @@ const $builtinmodule = () => {
         WHITE: [1, 1, 1],
         BLACK: [0, 0, 0],
         GRAY: [.5, .5, .5],
+        DARK_GRAY: [.2, .2, .2],
+        LIGHT_GRAY: [.8, .8, .8],
         BROWN: [.6, .2, .2],
         TAN: [.8, .7, .6],
         RED: [1, 0, 0],
@@ -341,6 +434,7 @@ const $builtinmodule = () => {
         GREEN: [0, .5, 0],
         AQUA: [0, 1, 1],
         BLUE: [0, 0, 1],
+        LIGHT_BLUE: [.5, .8, 1],
         AZURE: [.9, 1, 1],
         NAVY: [0, 0, .5],
         PURPLE: [.5, 0, .5],
@@ -353,10 +447,14 @@ const $builtinmodule = () => {
             if (value.ob$type == vector.class)
                 array.forEach((e, i, a) => a[i] = i < value.$data.length ? value.$get()[i] : e)
 
-            else if (Sk.builtin.checkSequence(value))
-                array.forEach((e, i, a) => a[i] = i < value.v.length ? value.v[i].v : e)
+            else if (Sk.builtin.checkNumber(value))
+                array.forEach((_, i, a) => a[i] = value.v)
 
-            else throw new Sk.builtin.TypeError("attribute must be a sequence of values")
+            else {
+                const item = sequence(value)
+                array.forEach((e, i, a) => a[i] = i < item.length ? item[i].v : e)
+            }
+                
             return array
         },
 
@@ -378,7 +476,7 @@ const $builtinmodule = () => {
                 if (is(other, vector.class))                
                     return tuple(Array.from({
                         length: Math.max(self.$data.length, other.$data.length)
-                    }).map((_e, i) => float(eval((self.$get()[i] || 0) + type + (other.$get()[i] || 0)))))
+                    }).map((_, i) => float(eval((self.$get()[i] || 0) + type + (other.$get()[i] || 0)))))
 
                 throw new Sk.builtin.TypeError("must be Vector or number, not " + other.tp$name)
             }
@@ -411,7 +509,7 @@ const $builtinmodule = () => {
         }, "Vector")
     }
 
-    const shape = {
+    const base = {
         new: (self, x, y, angle, color) => {
             self.$color = vector.set(color, [0, 0, 0, 1])
             self.$pos = [number(x), number(y)]
@@ -486,7 +584,7 @@ const $builtinmodule = () => {
             locals.color = property(
                 def(self => vector.new(self, () => self.$color, ["red", red], ["green", green], ["blue", blue], ["alpha", alpha])),
                 def((self, value) => vector.set(value, self.$color)))
-        }, "Shape")
+        }, "Base")
     }
 
     module.MAN = path("images/man.png")
@@ -552,10 +650,6 @@ const $builtinmodule = () => {
             def(self => vector.new(self, () => [width(), height()], ["x", blank], ["y", blank])),
             def((_self, value) => vector.set(value, new Array(2))))
 
-        locals.top = property(def(() => float(height() / 2)))
-        locals.bottom = property(def(() => float(height() / -2)))
-        locals.left = property(def(() => float(width() / -2)))
-        locals.right = property(def(() => float(width() / 2)))
         locals.resize = property(def(self => bool(self.$resize)))
     }, "Window"))
 
@@ -742,11 +836,16 @@ const $builtinmodule = () => {
         locals.pos = locals.position = property(
             def(self => vector.new(self, () => self.$pos, ["x", x], ["y", y])),
             def((self, value) => vector.set(value, self.$pos)))
+
+        locals.top = property(def(self => float(self.$pos[1] + height() / 2)))
+        locals.bottom = property(def(self => float(self.$pos[1] - height() / 2)))
+        locals.left = property(def(self => float(self.$pos[0] - width() / 2)))
+        locals.right = property(def(self => float(self.$pos[0] + width() / 2)))
     }, "Camera"))
 
     module.Rectangle = build((_globals, locals) => {
         const init = (self, x, y, width, height, angle, color) => {
-            shape.new(self, x, y, angle, color)
+            base.new(self, x, y, angle, color)
 
             self.$size = [number(width), number(height)]
             self.$top = () => getPolyTop(getRectPoly(self))
@@ -770,7 +869,7 @@ const $builtinmodule = () => {
         locals.size = property(
             def(self => vector.new(self, () => self.$size, ["width", width], ["height", height])),
             def((self, value) => vector.set(value, self.$size)))
-    }, "Rectangle", [shape.class])
+    }, "Rectangle", [base.class])
 
     module.Image = build((_globals, locals) => {
         const init = (self, name, x, y, angle, width, height, color) => wait((resolve, reject) => {
@@ -922,7 +1021,7 @@ const $builtinmodule = () => {
         }
 
         const init = (self, x, y, diameter, color) => {
-            shape.new(self, x, y, int(), color)
+            base.new(self, x, y, int(), color)
 
             self.$top = () => getCenter(self)[1] + self.$radius * self.$scale[1]
             self.$left = () => getCenter(self)[0] - self.$radius * self.$scale[0]
@@ -963,7 +1062,61 @@ const $builtinmodule = () => {
         locals.scale = property(
             def(self => vector.new(self, () => self.$scale, ["x", scaleX], ["y", scaleY])),
             def((self, value) => vector.set(value, self.$scale) && data(self)))
-    }, "Circle", [shape.class])
+    }, "Circle", [base.class])
+
+    module.Shape = build((_globals, locals) => {
+        const init = (self, points, x, y, angle, color) => {
+            base.new(self, x, y, angle, color)
+
+            self.$top = () => getPolyTop(getShapePoly(self))
+            self.$left = () => getPolyLeft(getShapePoly(self))
+            self.$bottom = () => getPolyBottom(getShapePoly(self))
+            self.$right = () => getPolyRight(getShapePoly(self))
+            
+            if (sequence(points).length < 3)
+                throw new Sk.builtin.ValueError("shape must have at least 3 corners")
+
+            self.$data = sequence(points).map(e => {
+                const array = sequence(e)
+
+                if (array.length < 2)
+                    throw new Sk.builtin.ValueError("point must contain 2 values")
+
+                return [number(array[0]), number(array[1])]
+            })
+
+            self.$indices = polySplit(self.$data)
+            self.$vbo = gl.createBuffer()
+            self.$ibo = gl.createBuffer()
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, self.$vbo)
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(self.$data.flat(1)), gl.DYNAMIC_DRAW)
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.$ibo)
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(self.$indices), gl.STATIC_DRAW)
+        }
+
+        init.$defaults = [
+            tuple([tuple([int(), int(25)]), tuple([int(25), int(-25)]), tuple([int(-25), int(-25)])]),
+            int(), int(), int(), tuple()
+        ]
+
+        init.co_varnames = ["self", "points", "x", "y", "angle", "color"]
+        locals.__init__ = def(init)
+
+        locals.draw = def(self => {
+            setMatrix(self, 1, 1)
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, self.$vbo)
+            gl.vertexAttribPointer(gl.getAttribLocation(program, "vertex"), 2, gl.FLOAT, false, 0, 0)
+            gl.enableVertexAttribArray(0)
+
+            gl.uniform1i(gl.getUniformLocation(program, "image"), false)
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, self.$ibo)
+            gl.drawElements(gl.TRIANGLES, self.$indices.length, gl.UNSIGNED_SHORT, 0)
+            gl.disableVertexAttribArray(0)
+        })
+    }, "Shape", [base.class])
 
     module.random = def((a, b) => {
         const min = Math.min(number(a), number(b))
