@@ -1,0 +1,4 @@
+{
+    "include": ["../../Skulpt/src/*"],
+    "files": ["JoBase/__init__.js"]
+}

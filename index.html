@@ -195,6 +195,15 @@
                 spin.className = "fa-solid fa-gear"
             }
 
+            function read(file) {
+                if (file.match(/JoBase/))
+                    return Sk.misceval.promiseToSuspension(
+                        fetch("JoBase/__init__.js").then(r => r.text()))
+
+                if (Sk.builtinFiles.files[file])
+                    return Sk.builtinFiles.files[file]
+            }
+
             async function cancel() {
                 try {
                     Sk.execLimit = 0
@@ -223,7 +232,7 @@
                 mirror.on("change", () => localStorage.setItem("code", mirror.getValue()))
                 onmouseup = () => onpointermove = null
 
-                Sk.configure({output})
+                Sk.configure({output, read})
                 Sk.timeoutMsg = () => "Aborted"
                 Sk.JoBase = canvas
 
